@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# This module contains the main interface for DHTPlay
 
 import gtk
 import glib

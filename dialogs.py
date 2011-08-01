@@ -1,3 +1,5 @@
+# This module contains some classes for reusing dialog paradigms
+
 import gtk
 
 class HostDialog(gtk.Dialog):

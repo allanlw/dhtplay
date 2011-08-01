@@ -1,13 +1,15 @@
+# This contains all of the DHT functions. In theory it could be used
+# as a standalone library. (still would be dependent on GTK though)
 import SocketServer
 import time
 import traceback
 import socket
 import gobject
-import gtk
 import glib
 import math
 import hashlib
 import random
+
 from bencode import *
 
 MAX_BUCKET_SIZE = 8

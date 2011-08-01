@@ -1,3 +1,5 @@
+# These are the default settings that the application needs
+
 import ConfigParser
 import io
 

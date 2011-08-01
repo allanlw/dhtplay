@@ -1,0 +1,9 @@
+TODO:
+* Add proper torrent info_hash recording support
+* support sending announce_peer packets
+* Add indicator if not receiving any incoming queries
+* Add boolean for having received a query for nodes
+* Add torrent tab to interface
+* Add responding to queries support
+* Add sending scrape support
+* swap find_peers and get_nodes in context menu for tree view right click
