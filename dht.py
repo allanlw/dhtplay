@@ -11,62 +11,13 @@ import hashlib
 import random
 
 from bencode import *
+from net import Hash, ContactInfo
+from torrent import TorrentDB
 
 MAX_BUCKET_SIZE = 8
 MAX_PENDING_PINGS = 2
 IDLE_TIMEOUT = 15 * 60 # s
 REFRESH_CHECK = 30 # s
-
-class Hash:
-  def __init__(self, id):
-    self.id = id
-    if isinstance(self.id, basestring):
-      if len(self.id) == 40:
-        self.id = int(self.id, 16)
-      elif len(self.id) == 20:
-        self.id = 0
-        for c in id:
-          self.id = self.id << 8
-          self.id += ord(c)
-    elif isinstance(self.id, DHTHash):
-      self.id = id.id
-  def get_hex(self):
-    return "{0:x}".format(self.id)
-  def get_20(self):
-    id = self.id
-    result = ""
-    while id != 0:
-      result = chr(id % 256) + result
-      id = id >> 8
-    return result
-  def get_int(self):
-    return self.id
-  def __int__(self):
-    return self.get_int()
-  def __str__(self):
-    return self.get_20()
-  def __long__(self):
-    return self.get_int()
-  def distance(self, other):
-    return self.get_int() ^ other.get_int()
-
-class ContactInfo:
-  def __init__(self, host, port=None):
-    if port is None and len(host) == 6:
-      port = host[4:6]
-      host = host[0:4]
-    self.host = host
-    if self.host and len(self.host) == 4:
-      self.host = socket.inet_ntoa(self.host)
-    self.port = port
-    if isinstance(self.port, basestring):
-      self.port = (ord(self.port[0]) << 8) + ord(self.port[1])
-  def get_tuple(self):
-    return self.host, self.port
-  def get_packed(self):
-    result = socket.inet_pton(self.host)
-    result += chr(self.port << 8) + chr(self.port % 256)
-    return result
 
 class BloomFilter:
   K = 2
@@ -109,13 +60,8 @@ class BloomFilter:
     result = ""
     for b in self.bloom:
       result += chr(b)
-
-class TorrentPeer:
-  def __init__(self, host, port=None):
-    self.contact = ContactInfo(host, port)
-    self.torrents = []
-  def add_hash(self, hash):
-    self.torrents.append(hash)
+  def get_hash(self):
+    return hashlib.sha1(self.host + str(self.port))
 
 class DHTNode(gobject.GObject):
   __gsignals__ = {
@@ -145,7 +91,7 @@ class DHTNode(gobject.GObject):
     return self.good and self.pending_pings < MAX_PENDING_PINGS
   def is_timely(self):
     return (time.time() - self.last_good) < IDLE_TIMEOUT
-  def send_ping(self, server):
+  def send_ping(self):
     self.server.send_ping(self.contact.get_tuple())
   def _handle_ping_response(self, message):
     if message["y"] == "r" and message["r"]["id"] == self.get_id_20():
@@ -199,7 +145,10 @@ class DHTBucket(gobject.GObject):
   def is_full(self):
     return len(self.nodes) >= MAX_BUCKET_SIZE
   def refresh(self):
-    random.choice(self.buckets).send_ping()
+    try:
+      random.choice(self.nodes).send_ping()
+    except IndexError:
+      pass
   def update(self):
     back = range(len(self.pending))
     back.reverse()
@@ -347,14 +296,15 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
 
 class DHTServer(SocketServer.UDPServer):
   allow_reuse_address = True
-  def __init__(self, id = None, bind=("127.0.0.1", 6881), logfunc=None):
+  def __init__(self, config, id = None, bind=("127.0.0.1", 6881), logfunc=None):
     self.logfunc = logfunc
     if self.logfunc:
       self.logfunc("Server Starting...")
     SocketServer.UDPServer.__init__(self, bind, DHTRequestHandler)
     self.last_tid = 0
     self.callbacks = {}
-    self.peers = []
+    self.config = config
+    self.torrents = TorrentDB(self.config.get("torrent", "db"))
     self.id = Hash(id)
     self.timeout_id = glib.timeout_add_seconds(REFRESH_CHECK, self._update)
     self.routingtable = DHTRoutingTable()
@@ -400,6 +350,7 @@ class DHTServer(SocketServer.UDPServer):
       self.logfunc("Server Stopping...")
     glib.source_remove(self.timeout_id)
     SocketServer.UDPServer.shutdown(self)
+    self.torrents.close()
     if self.logfunc:
       self.logfunc("Server Stopped.")
   def add_nodes(self, nodes):
@@ -449,8 +400,7 @@ class DHTServer(SocketServer.UDPServer):
   def _handle_get_peers(self, message, hash):
     if message["r"].has_key("values"):
       for n in message["r"]["values"]:
-        self.peers.append(TorrentPeer(n))
-        self.peers[-1].add_hash(hash)
+        self.torrents.add_peer(ContactInfo(n), hash)
     if message["r"].has_key("nodes"):
       self.add_nodes(message["r"]["nodes"])
 

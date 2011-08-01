@@ -202,6 +202,11 @@ class Interface(gtk.Window):
     btimecolumn.add_attribute(btimerenderer, "text", 4)
     bucketstree.append_column(btimecolumn)
 
+    torrentspage = gtk.VBox()
+    notebook.append_page(torrentspage, gtk.Label("Torrents"))
+    
+    
+
     logpage = gtk.VBox()
     notebook.append_page(logpage, gtk.Label("Log"))
 
@@ -251,12 +256,13 @@ class Interface(gtk.Window):
       self.cfg.set("last", "server_port", str(port))
       self.cfg.set("last", "server_hash", hash)
 
-      self.server = dht.DHTServer(hash, (host, port), self._do_log)
+      self.server = dht.DHTServer(self.cfg, hash, (host, port), self._do_log)
       self.server.routingtable.connect("node-added", self._node_added)
       self.server.routingtable.connect("node-removed", self._node_removed)
       self.server.routingtable.connect("bucket-split", self._bucket_split)
       self.server.routingtable.connect("bucket-changed", self._bucket_changed)
       self.server.routingtable.connect("node-changed", self._node_changed)
+      self.server.torrents.connect("torrent-added", self._torrent_added)
 
       self.server_thread = threading.Thread(target=self._bootstrap_server)
       self.server_thread.daemon = True
@@ -470,6 +476,9 @@ class Interface(gtk.Window):
         menu.popup(None, None, None, event.button, event.time)
 
   def _bucketstree_button_press(self, treeview, event):
+    pass
+
+  def _torrent_added(self, peer, torrent):
     pass
 
   def load_torrent(self, widget):

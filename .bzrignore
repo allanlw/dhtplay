@@ -4,3 +4,4 @@ dht.pyc
 dialogs.pyc
 settings.cfg
 test.torrent
+torrents.sqlite

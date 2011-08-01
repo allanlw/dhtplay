@@ -4,6 +4,9 @@ import ConfigParser
 import io
 
 defaults = """ 
+[torrent]
+db = :memory:
+
 [view]
 
 [last]
