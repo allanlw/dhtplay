@@ -1,11 +1,15 @@
 import socket
+import math
 
 class Hash:
   def __init__(self, id):
     self.id = id
     if isinstance(self.id, (basestring, buffer)):
       if len(self.id) > 20:
-        self.id = int(self.id, 16)
+        try:
+          self.id = int(self.id, 16)
+        except ValueError:
+          raise ValueError("Invalid ID (len {0}, not hex)", len(self.id))
       else:
         id = self.id
         while len(id) < 20:
@@ -37,7 +41,11 @@ class Hash:
     return self.get_int()
   def distance(self, other):
     return self.get_int() ^ other.get_int()
-
+  def get_pow(self):
+    try:
+      return math.log(self.get_int(), 2)
+    except ValueError:
+      return 0
 class ContactInfo:
   def __init__(self, host, port=None):
     if port is None and len(host) == 6:
@@ -55,4 +63,3 @@ class ContactInfo:
     result = socket.inet_pton(socket.AF_INET, self.host)
     result += chr(self.port >> 8) + chr(self.port % 256)
     return buffer(result)
-

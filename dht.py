@@ -161,7 +161,7 @@ class DHTRoutingTable(gobject.GObject):
         self._delete_node(row["id"], row["hash"])
         culled = True
         break
-    return added
+    return culled
 
   def _split_bucket(self, now, bucket_row, bstart, bend):
     bmid = bstart + (bend - bstart)/2
@@ -170,15 +170,15 @@ class DHTRoutingTable(gobject.GObject):
     newb = self.conn.insert("INSERT INTO buckets VALUES (NULL, ?, ?, ?, ?)",
                             (Hash(bmid).get_20(), bucket_row["end"], now, now))
     oldb = bucket_row["id"]
-    self.idle_add(self.emit, "bucket-split", oldb, newb)
+    glib.idle_add(self.emit, "bucket-split", oldb, newb)
 
     rows = self.conn.select("SELECT id,hash FROM nodes WHERE bucket_id=?",
                             (oldb,))
     for row in rows:
-      h = Hash(row[0])
+      h = Hash(row[1])
       if h.get_int() < bmid:
-        c.execute("UPDATE nodes SET bucket_id=? WHERE id=?",
-                  (newb,now,row["id"]))
+        self.conn.execute("UPDATE nodes SET bucket_id=? WHERE id=?",
+                          (newb,row["id"]))
         glib.idle_add(self.emit, "node-changed", h)
 
   def add_node(self, contact, hash):
@@ -187,8 +187,8 @@ class DHTRoutingTable(gobject.GObject):
     node_row = self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
                                     (hash.get_20(),))
     if node_row is not None:
-      self.conn.execute("UPDATE nodes SET updated=? WHERE id=",
-                        (now, nodes_row["id"]))
+      self.conn.execute("UPDATE nodes SET updated=? WHERE id=?",
+                        (now, node_row["id"]))
       glib.idle_add(self.emit, "node-changed", hash)
       return
 
@@ -200,27 +200,27 @@ class DHTRoutingTable(gobject.GObject):
       raise ValueError("No bucket found???")
 
     count = self.conn.select_one("""SELECT COUNT(*) FROM nodes
-                                    WHERE bucket_id=?
-                                    LIMIT 1""",
+                                    WHERE bucket_id=?""",
                                  (bucket_row["id"],))[0]
 
     bstart = Hash(bucket_row["start"]).get_int()
     bend = Hash(bucket_row["end"]).get_int()
 
-    if (count <= MAX_BUCKET_SIZE):
+    if count < MAX_BUCKET_SIZE:
       # add normally
       self._add_node(hash, contact, bucket_row["id"], True, now)
-    elif (bstart <= hash.get_int() and hash.get_int() < bend):
+    elif (bstart <= self.server.id.get_int() and
+          self.server.id.get_int() < bend):
+      # split bucket
+      self._split_bucket(now, bucket_row, bstart, bend)
+      self.add_node(contact, hash)
+    else:
       # add pending
       culled = self._cull_bucket(now, bucket_row["id"])
       if culled:
         self.add_node(contact, hash)
       else:
         self._add_node(hash, contact, bucket_row["id"], True, now, True)
-    else:
-      # split bucket
-      self._split_bucket(now, bucket_row, bstart, bend)
-      self.add_node(contact, hash)
   def get_node_row(self, hash):
     return self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
                                 (hash.get_20(),))
@@ -372,7 +372,6 @@ class DHTServer(SocketServer.UDPServer):
     SocketServer.UDPServer.shutdown(self)
     self.torrents.close()
     self.routingtable.close()
-    self.conn.commit()
     self.conn.close()
     if self.logfunc:
       self.logfunc("Server Stopped.")
@@ -380,8 +379,8 @@ class DHTServer(SocketServer.UDPServer):
     while nodes:
       contact = nodes[0:26]
       nodes = nodes[26:]
-      self.routingtable.add_node(ContactInfo(contact[24:26]),
-                                 Hash(contact[0:24]))
+      self.routingtable.add_node(ContactInfo(contact[20:26]),
+                                 Hash(contact[0:20]))
   def handle_error(self, request, client_address):
     if self.logfunc:
       self.logfunc("Error with connection from "+str(client_address))

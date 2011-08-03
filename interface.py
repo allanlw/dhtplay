@@ -273,8 +273,8 @@ class Interface(gtk.Window):
     self.server.routingtable.connect("bucket-changed", self._bucket_changed)
     self.server.routingtable.connect("node-changed", self._node_changed)
     self.server.torrents.connect("torrent-added", self._torrent_added)
-    self.server.serve_forever()
     glib.idle_add(self._refresh_nodes)
+    self.server.serve_forever()
 
   def stop_server(self, widget=None):
     self.server.shutdown()
@@ -380,7 +380,6 @@ class Interface(gtk.Window):
     self.bucketslist.clear()
     if self.server:
        for bucket in self.server.routingtable.get_bucket_rows():
-         print bucket
          self._add_bucket_row(bucket)
        for node in self.server.routingtable.get_node_rows():
          self._add_node_row(node)
@@ -412,7 +411,7 @@ class Interface(gtk.Window):
            self.bucketslist.get_value(iter, 0) != bucket):
       iter = self.bucketslist.iter_next(iter)
     if iter is not None:
-      self.bucketslist.set(iter, 3, self.bucketslist.get(iter, 3)+amt)
+      self.bucketslist.set(iter, 3, self.bucketslist.get(iter, 3)[0]+amt)
 
   def _add_node_row(self, row):
     contact = ContactInfo(row["contact"])
@@ -431,11 +430,13 @@ class Interface(gtk.Window):
       iter = self.nodeslist.iter_next(iter)
     if iter is not None:
       contact = ContactInfo(row["contact"])
+      self._add_bucket_node(self.nodeslist.get(iter,0)[0], -1)
       self.nodeslist.set(iter, 0, row["bucket_id"],
                          1, contact.host, 2, contact.port,
                          3, Hash(row["hash"]).get_hex(),
                          4, row["updated"].ctime(),
-                         5, time.mktime(row["updated"].get_tuple()))
+                         5, time.mktime(row["updated"].timetuple()))
+      self._add_bucket_node(row["bucket_id"], +1)
 
   def _remove_node_row(self, row):
     iter = self.nodeslist.get_iter(0)

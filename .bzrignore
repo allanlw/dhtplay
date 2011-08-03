@@ -5,3 +5,4 @@ dialogs.pyc
 settings.cfg
 test.torrent
 torrents.sqlite
+torrents.db
