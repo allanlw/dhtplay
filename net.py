@@ -3,15 +3,18 @@ import socket
 class Hash:
   def __init__(self, id):
     self.id = id
-    if isinstance(self.id, basestring):
-      if len(self.id) == 40:
+    if isinstance(self.id, (basestring, buffer)):
+      if len(self.id) > 20:
         self.id = int(self.id, 16)
-      elif len(self.id) == 20:
+      else:
+        id = self.id
+        while len(id) < 20:
+          id = "\0" + id
         self.id = 0
         for c in id:
           self.id = self.id << 8
           self.id += ord(c)
-    elif isinstance(self.id, DHTHash):
+    elif isinstance(self.id, Hash):
       self.id = id.id
   def get_hex(self):
     return "{0:x}".format(self.id)
@@ -21,7 +24,9 @@ class Hash:
     while id != 0:
       result = chr(id % 256) + result
       id = id >> 8
-    return result
+    while len(result) < 20:
+      result = "\0" + result
+    return buffer(result)
   def get_int(self):
     return self.id
   def __int__(self):
@@ -47,7 +52,7 @@ class ContactInfo:
   def get_tuple(self):
     return self.host, self.port
   def get_packed(self):
-    result = socket.inet_pton(self.host)
-    result += chr(self.port << 8) + chr(self.port % 256)
-    return result
+    result = socket.inet_pton(socket.AF_INET, self.host)
+    result += chr(self.port >> 8) + chr(self.port % 256)
+    return buffer(result)
 

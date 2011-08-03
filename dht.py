@@ -1,7 +1,6 @@
 # This contains all of the DHT functions. In theory it could be used
-# as a standalone library. (still would be dependent on GTK though)
+# as a standalone library. (still would be dependent on gobject though)
 import SocketServer
-import time
 import traceback
 import socket
 import gobject
@@ -9,10 +8,13 @@ import glib
 import math
 import hashlib
 import random
+import sqlite3
+from datetime import datetime
 
 from bencode import *
 from net import Hash, ContactInfo
 from torrent import TorrentDB
+from sql import SQLiteThread
 
 MAX_BUCKET_SIZE = 8
 MAX_PENDING_PINGS = 2
@@ -63,233 +65,244 @@ class BloomFilter:
   def get_hash(self):
     return hashlib.sha1(self.host + str(self.port))
 
-class DHTNode(gobject.GObject):
-  __gsignals__ = {
-    "changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ())
-  }
-  def __init__(self, server, host, port=None, id=None):
-    gobject.GObject.__init__(self)
-
-    if port is None and id is None:
-      if len(host) != 26:
-        raise ValueError("Invalid Compact Node Info!")
-      id = host[0:20]
-      host = host[20:26]
-
-    self.contact = ContactInfo(host, port)
-    self.id = Hash(id)
-    self.bucket = None
-    self.server = server
-    self.last_good = time.time()
-    self.first_seen = self.last_good
-    self.pending_pings = 0
-    self.good = True
-    self.emit("changed")
-  def is_valid(self):
-    return self.is_good() and self.is_timely()
-  def is_good(self):
-    return self.good and self.pending_pings < MAX_PENDING_PINGS
-  def is_timely(self):
-    return (time.time() - self.last_good) < IDLE_TIMEOUT
-  def send_ping(self):
-    self.server.send_ping(self.contact.get_tuple())
-  def _handle_ping_response(self, message):
-    if message["y"] == "r" and message["r"]["id"] == self.get_id_20():
-      self.good = True
-      self.last_good = time.time()
-    else:
-      self.good = False
-    glib.idle_add(self.emit, "changed")
-    self.bucket.update()
-  def _handle_find_response(self, message):
-    self._handle_ping_response(message)
-  def get_id_hex(self):
-    return self.id.get_hex()
-  def get_id_20(self):
-    return self.id.get_20()
-  def get_id_int(self):
-    return self.id.get_int()
-
-class DHTBucket(gobject.GObject):
-  __gsignals__ = {
-    "node-added": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTNode,)),
-    "node-removed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTNode,)),
-    "node-changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTNode,)),
-    "changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
-    "split": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (object,))
-  }
-  def __init__(self, start, end):
-    gobject.GObject.__init__(self)
-    self.id = -1
-    self.start = start
-    self.end = end
-    self.nodes = []
-    self.handlers = []
-    self.last_changed = time.time()
-    self.pending = []
-    glib.idle_add(self.emit, "changed")
-  def do_node_added(self, node):
-    self.emit("changed")
-  def do_node_removed(self, node):
-    self.emit("changed")
-  def do_changed(self):
-    self.last_changed = time.time()
-  def do_split(self, bucket):
-    self.emit("changed")
-  def do_node_changed(self, node):
-    self.emit("changed")
-  def node_in_range(self, node):
-    return self.id_in_range(node.get_id_int())
-  def id_in_range(self, id):
-    return id >= self.start and id < self.end
-  def is_full(self):
-    return len(self.nodes) >= MAX_BUCKET_SIZE
-  def refresh(self):
-    try:
-      random.choice(self.nodes).send_ping()
-    except IndexError:
-      pass
-  def update(self):
-    back = range(len(self.pending))
-    back.reverse()
-    for i in back:
-      n = self.pending.pop(i)
-      if n.is_valid():
-        self.add_node(n)
-    r = range(len(self.nodes))
-    r.reverse()
-    for i in r:
-      if not self.nodes[i].is_good():
-        self._remove_node(i)
-    if time.time() - self.last_changed > IDLE_TIMEOUT:
-      self.refresh()
-  def split(self):
-    half = self.start + ((self.end - self.start)/2)
-    result = (DHTBucket(half, self.end), self.nodes[:])
-    while self.nodes:
-      self._remove_node(0)
-    self.end = half
-    glib.idle_add(self.emit, "split", result[0])
-    return result
-  def get_node(self, id):
-    for n in self.nodes:
-      if n.id.get_int() == id:
-        return n
-    return None
-  def _add_node(self, node):
-    node.bucket = self
-    self.nodes.append(node)
-    glib.idle_add(self.emit, "node-added", node)
-    self.handlers.append(node.connect("changed", lambda w: glib.idle_add(self.emit, "node-changed", w)))
-  def _remove_node(self, i):
-    node = self.nodes.pop(i)
-    node.bucket = None
-    node.handler_disconnect(self.handlers.pop(i))
-    glib.idle_add(self.emit, "node-removed", node)
-  def add_node(self, node):
-    if not self.node_in_range(node):
-      raise ValueError("Adding node to invalid bucket!")
-    if not node.is_valid():
-      return
-    if not self.is_full():
-      self._add_node(node)
-    else:
-      added = False
-      for i, n in enumerate(self.nodes):
-        if n.is_good():
-          if not n.is_timely():
-            n.send_ping()
-        else:
-          self._remove_node(i)
-          self._add_node(node)
-          added = True
-          break
-      if not added:
-        self.pending.append(node)
-  def get_start_pow(self):
-    try:
-      return math.log(self.start, 2)
-    except ValueError:
-      return 0
-  def get_end_pow(self):
-    return math.log(self.end, 2)
+#  def _handle_ping_response(self, message):
+#    if message["y"] == "r" and message["r"]["id"] == self.get_id_20():
+#      self.good = True
+#      self.last_good = time.time()
+#    else:
+#      self.good = False
+#    glib.idle_add(self.emit, "changed")
+#    self.bucket.update()
 
 class DHTRoutingTable(gobject.GObject):
   __gsignals__ = {
     "changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
-    "bucket-split": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTBucket, DHTBucket)),
-    "bucket-changed" : (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTBucket,)),
-    "node-added": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTBucket, DHTNode)),
-    "node-removed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTBucket, DHTNode)),
-    "node-changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (DHTNode,))
+    "bucket-split": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (int, int)),
+    "bucket-changed" : (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (int,)),
+    "node-added":
+       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
+    "node-removed":
+       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
+    "node-changed":
+       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,))
   }
-  def __init__(self):
+  def __init__(self, server, conn):
     gobject.GObject.__init__(self)
-    self.last_id = -1
-    self.buckets = [DHTBucket(0l, 1l << 160)]
-    self._bind_bucket(self.buckets[0])
+
+    self.conn = conn
+    self.server = server
+    c = self.conn
+    c.executescript(""" 
+      CREATE TABLE IF NOT EXISTS buckets (
+        id INTEGER PRIMARY KEY,
+        start BLOB,
+        end BLOB,
+        created timestamp,
+        updated timestamp
+      );
+      CREATE TABLE IF NOT EXISTS nodes (
+        id INTEGER PRIMARY KEY,
+        hash BLOB,
+        contact BLOB,
+        bucket_id INTEGER,
+        good BOOLEAN,
+        created timestamp,
+        updated timestamp
+      );
+      CREATE TABLE IF NOT EXISTS pending_nodes (
+        id INTEGER PRIMARY KEY,
+        node_id INTEGER,
+        bucket_id INTEGER
+      );
+    """
+    )
+    r = c.select_one("SELECT COUNT(*) FROM buckets")
+    if r[0] == 0:
+      lower = Hash(0).get_20()
+      upper = Hash((1 << 160) - 1).get_20()
+      now = datetime.now()
+      c.execute("INSERT INTO buckets VALUES(NULL, ?, ?, ?, ?)",
+                (lower, upper, now, now))
     glib.idle_add(self.emit, "changed")
-  def add_node(self, node, test=True):
-    if test and self.get_node(node.get_id_int()) is not None:
-      return
-    for i, b in enumerate(self.buckets):
-      if not b.node_in_range(node):
-        continue
-      if not b.is_full() or not b.id_in_range(node.server.id.get_int()):
-        b.add_node(node)
+
+  def _add_node(self, hash, contact, bucket, seed, time, pending=False):
+    if pending:
+      bid = -1
+    else:
+      bid = bucket
+    id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+                          (hash.get_20(), contact.get_packed(),
+                           bid, seed, time, time))
+    glib.idle_add(self.emit, "node-added", hash)
+    if not pending:
+      self.conn.execute("UPDATE buckets SET updated=? WHERE id=?",
+                        (time, bucket))
+    else:
+      self.conn.execute("INSERT INTO pending_nodes VALUES (NULL, ?, ?)",
+                        (id, bucket))
+    glib.idle_add(self.emit, "bucket-changed", bucket)
+    return id
+
+  def _delete_node(self, id, hash):
+    self.conn.execute("DELETE FROM nodes WHERE id=?", (id,))
+    glib.idle_add(self.emit, "node-removed", Hash(hash))
+
+  def _cull_bucket(self, now, bucket):
+    rows = self.conn.select("""SELECT * FROM nodes
+                               WHERE bucket_id=?
+                               ORDER BY updated ASC""",
+                            (bucket,))
+    culled = False
+    for row in rows:
+      if row["good"]:
+        if (now - row["updated"]).seconds >= IDLE_TIMEOUT:
+          self.server.send_ping(contact.get_tuple())
       else:
-        b2, nodes = b.split()
-        self._bind_bucket(b2)
-        self.buckets.insert(i+1, b2)
-        nodes.append(node)
-        for n in nodes:
-          self.add_node(n, False)
-      break
-  def get_node(self, id):
-    for b in self.buckets:
-      if not b.id_in_range(id):
-        continue
-      return b.get_node(id)
+        self._delete_node(row["id"], row["hash"])
+        culled = True
+        break
+    return added
+
+  def _split_bucket(self, now, bucket_row, bstart, bend):
+    bmid = bstart + (bend - bstart)/2
+    self.conn.execute("UPDATE buckets SET end=?, updated=? WHERE id=?",
+                      (Hash(bmid).get_20(), now, bucket_row["id"]))
+    newb = self.conn.insert("INSERT INTO buckets VALUES (NULL, ?, ?, ?, ?)",
+                            (Hash(bmid).get_20(), bucket_row["end"], now, now))
+    oldb = bucket_row["id"]
+    self.idle_add(self.emit, "bucket-split", oldb, newb)
+
+    rows = self.conn.select("SELECT id,hash FROM nodes WHERE bucket_id=?",
+                            (oldb,))
+    for row in rows:
+      h = Hash(row[0])
+      if h.get_int() < bmid:
+        c.execute("UPDATE nodes SET bucket_id=? WHERE id=?",
+                  (newb,now,row["id"]))
+        glib.idle_add(self.emit, "node-changed", h)
+
+  def add_node(self, contact, hash):
+    now = datetime.now()
+
+    node_row = self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
+                                    (hash.get_20(),))
+    if node_row is not None:
+      self.conn.execute("UPDATE nodes SET updated=? WHERE id=",
+                        (now, nodes_row["id"]))
+      glib.idle_add(self.emit, "node-changed", hash)
+      return
+
+    bucket_row = self.conn.select_one("""SELECT * FROM buckets
+                                         WHERE start<=? AND end>?
+                                         LIMIT 1""",
+                                      (hash.get_20(),hash.get_20()))
+    if bucket_row is None:
+      raise ValueError("No bucket found???")
+
+    count = self.conn.select_one("""SELECT COUNT(*) FROM nodes
+                                    WHERE bucket_id=?
+                                    LIMIT 1""",
+                                 (bucket_row["id"],))[0]
+
+    bstart = Hash(bucket_row["start"]).get_int()
+    bend = Hash(bucket_row["end"]).get_int()
+
+    if (count <= MAX_BUCKET_SIZE):
+      # add normally
+      self._add_node(hash, contact, bucket_row["id"], True, now)
+    elif (bstart <= hash.get_int() and hash.get_int() < bend):
+      # add pending
+      culled = self._cull_bucket(now, bucket_row["id"])
+      if culled:
+        self.add_node(contact, hash)
+      else:
+        self._add_node(hash, contact, bucket_row["id"], True, now, True)
+    else:
+      # split bucket
+      self._split_bucket(now, bucket_row, bstart, bend)
+      self.add_node(contact, hash)
+  def get_node_row(self, hash):
+    return self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
+                                (hash.get_20(),))
+  def get_bucket_row(self, id):
+    return self.conn.select_one("SELECT * FROM buckets WHERE id=? LIMIT 1",
+                                (id,))
+  def get_node_rows(self):
+    return self.conn.select("SELECT * FROM nodes")
+  def get_bucket_rows(self):
+    return self.conn.select("SELECT * FROM buckets")
   def do_bucket_split(self, bucket1, bucket2):
     self.emit("changed")
   def do_bucket_changed(self, bucket):
     self.emit("changed")
-  def do_node_added(self, bucket, node):
+  def do_node_added(self, node):
     self.emit("changed")
   def do_node_changed(self, node):
     self.emit("changed")
-  def do_node_removed(self, bucket, node):
+  def do_node_removed(self, node):
     self.emit("changed")
-  def _bind_bucket(self, bucket):
-    self.last_id += 1
-    bucket.id = self.last_id
-
-    bucket.connect("split", lambda x, y: glib.idle_add(self.emit, "bucket-split", x, y))
-    bucket.connect("changed", lambda b: glib.idle_add(self.emit, "bucket-changed", b) )
-    bucket.connect("node-added", lambda b,n: glib.idle_add(self.emit, "node-added",b,n))
-    bucket.connect("node-removed", lambda x, y: glib.idle_add(self.emit, "node-removed", x, y))
-    bucket.connect("node-changed", lambda b, n: glib.idle_add(self.emit, "node-changed", n))
   def refresh(self):
-    for bucket in self.buckets:
-      bucket.update()
+    now = datetime.now()
+    self.conn.execute("DELETE FROM nodes WHERE NOT good")
+    rows = self.conn.select('''SELECT nodes.*, pending_nodes.* FROM nodes
+                               INNER JOIN pending_nodes
+                               ON nodes.id=pending_nodes.node_id''')
+
+    for row in rows:
+      if not (row["nodes.good"] and
+              (now - row["nodes.updated"]).seconds > IDLE_TIMEOUT):
+        self.conn.execute("DELETE FROM nodes WHERE id=?", (row["nodes.id"],))
+        self.conn.execute("DELETE FROM pending_nodes WHERE id=?",
+                          (row["pending_nodes.id"],))
+      else:
+        culled = self._cull_bucket(now, row["pending_nodes.bucket_id"])
+        if culled:
+          self.conn.execute("""UPDATE nodes SET bucket_id=?, updated=?
+                               WHERE id=?""",
+                            (row["pending_nodes.bucket_id"], now,
+                             row["nodes.id"]))
+          glib.idle_add(self.emit, "node-added", Hash(row["nodes.hash"]))
+          self.conn.execute("UPDATE buckets SET update=? WHERE id=?",
+                            (now, row["pending_nodes.bucket_id"]))
+          glib.idle_add(self.emit, "bucket-changed",
+                        row["pending_nodes.bucket_id"])
+
+    rows = self.conn.select("SELECT * FROM buckets")
+    for r in rows:
+      if (now - r["updated"]).seconds > IDLE_TIMEOUT:
+        self._refresh_bucket(r["id"])
+
+  def _refresh_bucket(self, bucket):
+    r = self.conn.select_one("""SELECT contact FROM nodes WHERE bucket_id=?
+                                ORDER BY random() LIMIT 1""",
+                             (bucket))
+    if r is not None:
+      self.server.ping(ContactInfo(r["contact"]).get_tuple())
+  def _handle_ping_response(self, hash, message):
+    pass
+  def _handle_find_response(self, hash, message):
+    pass
+  def _handle_get_peers_response(self, hash, message):
+    pass
+  def close(self):
+    pass
 
 class DHTRequestHandler(SocketServer.DatagramRequestHandler):
   def handle(self):
-    if self.server.logfunc:
-      self.server.logfunc("Client connected:"+str(self.client_address))
     enc_message = self.rfile.read()
     if not enc_message:
       if self.server.logfunc:
         self.server.logfunc("From "+str(self.client_address)+":None")
       return
     message = bdecode(enc_message)[0]
+    if message.has_key("q") and message["q"] == "refresh":
+      self.server._update()
+      return
     if self.server.logfunc:
       self.server.logfunc("From "+str(self.client_address)+":"+str(message))
     if message["y"] == "r":
-      self.server.routingtable.add_node(DHTNode(self.server,
-                                                self.client_address[0],
-                                                self.client_address[1],
-                                                message["r"]["id"]))
+      self.server.routingtable.add_node(ContactInfo(*self.client_address),
+                                        Hash(message["r"]["id"]))
     if self.server.callbacks.has_key(message["t"]):
       while self.server.callbacks[message["t"]]:
         self.server.callbacks[message["t"]].pop()(message)
@@ -300,14 +313,19 @@ class DHTServer(SocketServer.UDPServer):
     self.logfunc = logfunc
     if self.logfunc:
       self.logfunc("Server Starting...")
+
     SocketServer.UDPServer.__init__(self, bind, DHTRequestHandler)
     self.last_tid = 0
     self.callbacks = {}
     self.config = config
-    self.torrents = TorrentDB(self.config.get("torrent", "db"))
+    self.conn = SQLiteThread(self.config.get("torrent", "db"))
+    self.conn.start()
+    self.torrents = TorrentDB(self.conn)
     self.id = Hash(id)
-    self.timeout_id = glib.timeout_add_seconds(REFRESH_CHECK, self._update)
-    self.routingtable = DHTRoutingTable()
+    self.timeout_id = glib.timeout_add_seconds(REFRESH_CHECK,
+                                               self._send_update)
+    self.routingtable = DHTRoutingTable(self, self.conn)
+
     if self.logfunc:
       self.logfunc("Server Started.")
     self._update()
@@ -316,6 +334,7 @@ class DHTServer(SocketServer.UDPServer):
     if (self.last_tid >= 2**16):
       self.last_tid = 0
     return chr(self.last_tid/(2<<8))+chr(self.last_tid%(2<<8))
+
   def send_query(self, to, name, args):
     query = {"y":"q", "t":self.next_tid(), "q":name, "a":args}
     self.send_msg(to, query)
@@ -340,6 +359,7 @@ class DHTServer(SocketServer.UDPServer):
       return
     if self.logfunc:
       self.logfunc("Message sent to "+str(to))
+
   def add_callback(self, tid, func):
     if self.callbacks.has_key(tid):
       self.callbacks[tid].append(func)
@@ -351,14 +371,17 @@ class DHTServer(SocketServer.UDPServer):
     glib.source_remove(self.timeout_id)
     SocketServer.UDPServer.shutdown(self)
     self.torrents.close()
+    self.routingtable.close()
+    self.conn.commit()
+    self.conn.close()
     if self.logfunc:
       self.logfunc("Server Stopped.")
   def add_nodes(self, nodes):
     while nodes:
       contact = nodes[0:26]
       nodes = nodes[26:]
-      node = DHTNode(self, contact)
-      self.routingtable.add_node(node)
+      self.routingtable.add_node(ContactInfo(contact[24:26]),
+                                 Hash(contact[0:24]))
   def handle_error(self, request, client_address):
     if self.logfunc:
       self.logfunc("Error with connection from "+str(client_address))
@@ -370,10 +393,11 @@ class DHTServer(SocketServer.UDPServer):
     result = self.send_query(to, "ping", {"id": self.id.get_20()})
     self.add_callback(result, self._handle_ping_node)
     return result
+
   def _handle_ping_node(self, message):
     if (message["y"] == "r"):
       id = Hash(message["r"]["id"])
-      self.routingtable.get_node(id.get_int())._handle_ping_response(message)
+      self.routingtable._handle_ping_response(id, message)
 
   def send_find_node(self, to, hash):
     if self.logfunc:
@@ -387,7 +411,7 @@ class DHTServer(SocketServer.UDPServer):
     nodes = message["r"]["nodes"]
     self.add_nodes(nodes)
     id = Hash(message["r"]["id"])
-    self.routingtable.get_node(id.get_int())._handle_find_response(message)
+    self.routingtable._handle_find_response(id, message)
 
   def send_get_peers(self, to, hash):
     if self.logfunc:
@@ -403,6 +427,7 @@ class DHTServer(SocketServer.UDPServer):
         self.torrents.add_peer(ContactInfo(n), hash)
     if message["r"].has_key("nodes"):
       self.add_nodes(message["r"]["nodes"])
+    self.routingtable._handle_get_peers_response(Hash(message["r"]["id"]), message)
 
   def load_torrent(self, filename):
     f = open(filename, "r")
@@ -419,3 +444,8 @@ class DHTServer(SocketServer.UDPServer):
     if self.logfunc:
       self.logfunc("Routing table updated.")
     return True
+
+  def _send_update(self):
+#    msg = bencode({"y":"q", "q":"refresh", "t":"", "a":[]})
+#    self.socket.sendto(msg, self.socket.getsockname()) 
+    self.routingtable.refresh()

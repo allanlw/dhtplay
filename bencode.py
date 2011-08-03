@@ -30,7 +30,7 @@ class BencodeError(StandardError):
 def bencode(obj):
   if isinstance(obj, (int, long)):
     return bencode_int(obj)
-  elif isinstance(obj, basestring):
+  elif isinstance(obj, (basestring, buffer)):
     return bencode_string(obj)
   elif isinstance(obj, (list, tuple)):
     return bencode_list(obj)

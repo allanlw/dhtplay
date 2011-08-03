@@ -1,5 +1,4 @@
 TODO:
-* Add proper torrent info_hash recording support
 * support sending announce_peer packets
 * Add indicator if not receiving any incoming queries
 * Add boolean for having received a query for nodes

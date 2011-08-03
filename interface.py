@@ -12,6 +12,7 @@ import time
 import dht
 import defaults
 import dialogs
+from net import ContactInfo, Hash
 
 name = "DHTPlay"
 
@@ -256,25 +257,24 @@ class Interface(gtk.Window):
       self.cfg.set("last", "server_port", str(port))
       self.cfg.set("last", "server_hash", hash)
 
-      self.server = dht.DHTServer(self.cfg, hash, (host, port), self._do_log)
-      self.server.routingtable.connect("node-added", self._node_added)
-      self.server.routingtable.connect("node-removed", self._node_removed)
-      self.server.routingtable.connect("bucket-split", self._bucket_split)
-      self.server.routingtable.connect("bucket-changed", self._bucket_changed)
-      self.server.routingtable.connect("node-changed", self._node_changed)
-      self.server.torrents.connect("torrent-added", self._torrent_added)
-
-      self.server_thread = threading.Thread(target=self._bootstrap_server)
+      self.server_thread = threading.Thread(target=lambda:
+        self._bootstrap_server(hash, host, port))
       self.server_thread.daemon = True
       self.server_thread.start()
 
       self.started_only.set_sensitive(True)
       self.stopped_only.set_sensitive(False)
 
-      self._refresh_nodes()
-
-  def _bootstrap_server(self):
+  def _bootstrap_server(self, hash, host, port):
+    self.server = dht.DHTServer(self.cfg, hash, (host, port), self._do_log)
+    self.server.routingtable.connect("node-added", self._node_added)
+    self.server.routingtable.connect("node-removed", self._node_removed)
+    self.server.routingtable.connect("bucket-split", self._bucket_split)
+    self.server.routingtable.connect("bucket-changed", self._bucket_changed)
+    self.server.routingtable.connect("node-changed", self._node_changed)
+    self.server.torrents.connect("torrent-added", self._torrent_added)
     self.server.serve_forever()
+    glib.idle_add(self._refresh_nodes)
 
   def stop_server(self, widget=None):
     self.server.shutdown()
@@ -379,58 +379,88 @@ class Interface(gtk.Window):
     self.nodeslist.clear()
     self.bucketslist.clear()
     if self.server:
-      for bucket in self.server.routingtable.buckets:
-        self._bucket_split(self.server.routingtable, None, bucket)
-        for node in bucket.nodes:
-          self._node_added(self.server.routingtable, bucket, node)
+       for bucket in self.server.routingtable.get_bucket_rows():
+         print bucket
+         self._add_bucket_row(bucket)
+       for node in self.server.routingtable.get_node_rows():
+         self._add_node_row(node)
     return False
 
-  def _node_added(self, router, bucket, node):
-    self.nodeslist.append((node.bucket.id, node.contact.host, node.contact.port,
-                           node.get_id_hex(), time.ctime(node.last_good),
-                           node.last_good))
+  def _add_bucket_row(self, row):
+    self.bucketslist.append((row["id"],
+                             Hash(row["start"]).get_pow(),
+                             Hash(row["end"]).get_pow(),
+                             0,
+                             row["updated"].ctime(),
+                             time.mktime(row["updated"].timetuple())))
 
-  def _bucket_split(self, router, bucket1, bucket2):
-    self.bucketslist.append((int(bucket2.id),
-                            bucket2.get_start_pow(),
-                            bucket2.get_end_pow(),
-                            len(bucket2.nodes),
-                            time.ctime(bucket2.last_changed),
-                            bucket2.last_changed))
-    if bucket1:
-      self._bucket_changed(router, bucket1)
+  def _update_bucket_row(self, row):
+    iter = self.bucketslist.get_iter(0)
+    while (iter is not None and
+           self.bucketslist.get_value(iter, 0) != row["id"]):
+      iter = self.bucketslist.iter_next(iter)
+    if iter is not None:
+      self.bucketslist.set(iter, 0, row["id"],
+                           1, Hash(row["start"]).get_pow(),
+                           2, Hash(row["end"]).get_pow(),
+                           4, row["updated"].ctime(),
+                           5, time.mktime(row["updated"].timetuple()))
 
-  def _node_removed(self, router, bucket, node):
+  def _add_bucket_node(self, bucket, amt):
+    iter = self.bucketslist.get_iter(0)
+    while (iter is not None and
+           self.bucketslist.get_value(iter, 0) != bucket):
+      iter = self.bucketslist.iter_next(iter)
+    if iter is not None:
+      self.bucketslist.set(iter, 3, self.bucketslist.get(iter, 3)+amt)
+
+  def _add_node_row(self, row):
+    contact = ContactInfo(row["contact"])
+    self.nodeslist.append((row["bucket_id"],
+                           contact.host,
+                           contact.port,
+                           Hash(row["hash"]).get_hex(),
+                           row["updated"].ctime(),
+                           time.mktime(row["updated"].timetuple())))
+    self._add_bucket_node(row["bucket_id"], +1)
+
+  def _update_node_row(self, row):
     iter = self.nodeslist.get_iter(0)
     while (iter is not None and
-           self.nodeslist.get_value(iter, 3) != node.get_id_hex()):
+           self.nodeslist.get_value(iter, 3) != Hash(row["hash"]).get_hex()):
+      iter = self.nodeslist.iter_next(iter)
+    if iter is not None:
+      contact = ContactInfo(row["contact"])
+      self.nodeslist.set(iter, 0, row["bucket_id"],
+                         1, contact.host, 2, contact.port,
+                         3, Hash(row["hash"]).get_hex(),
+                         4, row["updated"].ctime(),
+                         5, time.mktime(row["updated"].get_tuple()))
+
+  def _remove_node_row(self, row):
+    iter = self.nodeslist.get_iter(0)
+    while (iter is not None and
+           self.nodeslist.get_value(iter, 3) != Hash(row["hash"]).get_hex()):
       iter = self.nodeslist.iter_next(iter)
     if iter is not None:
       self.nodeslist.remove(iter)
+    self._add_bucket_node(self, row["bucket_id"], -1)
+
+  def _node_added(self, router, hash):
+    self._add_node_row(router.get_node_row(hash))
+
+  def _bucket_split(self, router, bucket1, bucket2):
+    self._add_bucket_row(router.get_bucket_row(bucket2))
+    self._update_bucket_row(router.get_bucket_row(bucket1))
+
+  def _node_removed(self, router, hash):
+    self._remove_node_row(router.get_node_row(hash))
 
   def _bucket_changed(self, router, bucket):
-    iter = self.bucketslist.get_iter(0)
-    while (iter is not None and
-           self.bucketslist.get_value(iter, 0) != bucket.id):
-      iter = self.bucketslist.iter_next(iter)
-    if iter is not None:
-      self.bucketslist.set(iter, 0, int(bucket.id),
-                           1, bucket.get_start_pow(),
-                           2, bucket.get_end_pow(),
-                           3, len(bucket.nodes),
-                           4, time.ctime(bucket.last_changed),
-                           5, bucket.last_changed)
+    self._update_bucket_row(router.get_bucket_row(bucket))
 
-  def _node_changed(self, router, node):
-    iter = self.nodeslist.get_iter(0)
-    while (iter is not None and
-           self.nodeslist.get_value(iter, 3) != node.get_id_hex()):
-      iter = self.nodeslist.iter_next(iter)
-    if iter is not None:
-      self.nodeslist.set(iter, 0, int(node.bucket.id),
-                         1, node.contact.host, 2, node.contact.port,
-                         3, node.get_id_hex(), 4, time.ctime(node.last_good),
-                         5, node.last_good)
+  def _node_changed(self, router, hash):
+    self._update_node_row(router.get_node_row(hash))
 
   def _nodestree_button_press(self, treeview, event):
     if event.button == 3:
