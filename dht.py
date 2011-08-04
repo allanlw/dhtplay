@@ -1,5 +1,6 @@
-# This contains all of the DHT functions. In theory it could be used
-# as a standalone library. (still would be dependent on gobject though)
+"""This module contains all of the DHT functions. In theory it could be used
+as a standalone library. (still would be dependent on gobject though)."""
+
 import SocketServer
 import traceback
 import socket
@@ -62,8 +63,6 @@ class BloomFilter:
     result = ""
     for b in self.bloom:
       result += chr(b)
-  def get_hash(self):
-    return hashlib.sha1(self.host + str(self.port))
 
 #  def _handle_ping_response(self, message):
 #    if message["y"] == "r" and message["r"]["id"] == self.get_id_20():
@@ -91,43 +90,18 @@ class DHTRoutingTable(gobject.GObject):
 
     self.conn = conn
     self.server = server
-    c = self.conn
-    c.executescript(""" 
-      CREATE TABLE IF NOT EXISTS buckets (
-        id INTEGER PRIMARY KEY,
-        start BLOB,
-        end BLOB,
-        created timestamp,
-        updated timestamp
-      );
-      CREATE TABLE IF NOT EXISTS nodes (
-        id INTEGER PRIMARY KEY,
-        hash BLOB,
-        contact BLOB,
-        bucket_id INTEGER,
-        good BOOLEAN,
-        created timestamp,
-        updated timestamp
-      );
-      CREATE TABLE IF NOT EXISTS pending_nodes (
-        id INTEGER PRIMARY KEY,
-        node_id INTEGER,
-        bucket_id INTEGER
-      );
-    """
-    )
-    r = c.select_one("SELECT COUNT(*) FROM buckets")
+    r = self.conn.select_one("SELECT COUNT(*) FROM buckets")
     if r[0] == 0:
       lower = Hash(0).get_20()
       upper = Hash((1 << 160) - 1).get_20()
       now = datetime.now()
-      c.execute("INSERT INTO buckets VALUES(NULL, ?, ?, ?, ?)",
-                (lower, upper, now, now))
+      self.conn.execute("INSERT INTO buckets VALUES(NULL, ?, ?, ?, ?)",
+                        (lower, upper, now, now))
     glib.idle_add(self.emit, "changed")
 
   def _add_node(self, hash, contact, bucket, seed, time, pending=False):
     if pending:
-      bid = -1
+      bid = None
     else:
       bid = bucket
     id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?, ?, ?, ?, ?, ?)",
@@ -275,9 +249,9 @@ class DHTRoutingTable(gobject.GObject):
   def _refresh_bucket(self, bucket):
     r = self.conn.select_one("""SELECT contact FROM nodes WHERE bucket_id=?
                                 ORDER BY random() LIMIT 1""",
-                             (bucket))
+                             (bucket,))
     if r is not None:
-      self.server.ping(ContactInfo(r["contact"]).get_tuple())
+      self.server.send_ping(ContactInfo(r["contact"]).get_tuple())
   def _handle_ping_response(self, hash, message):
     pass
   def _handle_find_response(self, hash, message):
@@ -320,6 +294,7 @@ class DHTServer(SocketServer.UDPServer):
     self.config = config
     self.conn = SQLiteThread(self.config.get("torrent", "db"))
     self.conn.start()
+    self.conn.executescript(open("db.sql","r").read())
     self.torrents = TorrentDB(self.conn)
     self.id = Hash(id)
     self.timeout_id = glib.timeout_add_seconds(REFRESH_CHECK,

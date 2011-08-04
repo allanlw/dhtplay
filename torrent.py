@@ -16,28 +16,16 @@ class TorrentDB(gobject.GObject):
     "peer-updated":
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
     "peer-torrent-added":
-      (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
+      (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+       (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
     "peer-torrent-updated":
-      (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,))
+      (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+       (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT))
   }
   def __init__(self, conn):
     gobject.GObject.__init__(self)
     self.conn = conn
 
-    self.conn.executescript(""" 
-      CREATE TABLE IF NOT EXISTS peers (
-        id INTEGER PRIMARY KEY, contact BLOB UNIQUE,
-        created timestamp, updated timestamp
-      );
-      CREATE TABLE IF NOT EXISTS torrents (
-        id INTEGER PRIMARY KEY, hash BLOB UNIQUE,
-        created timestamp, updated timestamp
-      );
-      CREATE TABLE IF NOT EXISTS peer_torrents (
-        id INTEGER PRIMARY KEY, peer_id INTEGER, torrent_id INTEGER,
-        seed BOOLEAN, created timestamp, updated timestamp
-      );
-    """)
   def add_torrent(self, peer, torrent, seed=False):
     now = datetime.now()
     c = self.conn
@@ -55,7 +43,7 @@ class TorrentDB(gobject.GObject):
 
     peer_row = c.select_one("SELECT * FROM peers WHERE contact=? LIMIT 1",
                             (peer.get_packed(), ))
-    glib.idle_add(self.emit, signal, peer_row)
+    glib.idle_add(self.emit, signal, peer)
 
     torrent_row = c.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
                                (torrent.get_20(), ))
@@ -70,7 +58,7 @@ class TorrentDB(gobject.GObject):
 
     torrent_row = c.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
                                (torrent.get_20(),))
-    glib.idle_add(self.emit, signal, torrent_row)
+    glib.idle_add(self.emit, signal, torrent)
 
     peer_torrent_row = c.select_one("""SELECT * FROM peer_torrents
                                        WHERE peer_id=? AND torrent_id=?
@@ -89,7 +77,14 @@ class TorrentDB(gobject.GObject):
                                        WHERE peer_id=? AND torrent_id=?
                                        LIMIT 1""",
                                     (peer_row["id"], torrent_row["id"]))
-    glib.idle_add(self.emit, signal, peer_torrent_row)
+    glib.idle_add(self.emit, signal, peer, torrent)
 
   def close(self):
     pass
+
+  def get_torrent_row(self, hash):
+    return self.conn.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
+                                (hash.get_20(),))
+  def get_node_row(self, contact):
+    return self.conn.select_one("SELECT * FROM peers WHERE hash=? LIMIT 1",
+                                (hash.get_packed(),))

@@ -46,6 +46,7 @@ class Hash:
       return math.log(self.get_int(), 2)
     except ValueError:
       return 0
+
 class ContactInfo:
   def __init__(self, host, port=None):
     if port is None and len(host) == 6:

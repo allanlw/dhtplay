@@ -1,4 +1,4 @@
-# This module contains some classes for reusing dialog paradigms
+"""This module contains some classes for reusing dialog paradigms"""
 
 import gtk
 

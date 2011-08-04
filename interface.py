@@ -1,12 +1,8 @@
 #!/usr/bin/python
 # This module contains the main interface for DHTPlay
-
 import gtk
 import glib
-import gobject
 import threading
-import ConfigParser
-import math
 import time
 
 import dht
@@ -17,6 +13,8 @@ from net import ContactInfo, Hash
 name = "DHTPlay"
 
 version = "0.1"
+
+settings = "settings.cfg"
 
 class Interface(gtk.Window):
   def __init__(self, opts):
@@ -205,8 +203,36 @@ class Interface(gtk.Window):
 
     torrentspage = gtk.VBox()
     notebook.append_page(torrentspage, gtk.Label("Torrents"))
-    
-    
+
+    torrentswin = gtk.ScrolledWindow()
+    torrentswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+    torrentspage.pack_start(torrentswin, True, True)
+
+    self.torrentslist = gtk.ListStore(int, str, str, float)
+    torrentstree = gtk.TreeView(self.torrentslist)
+    torrentstree.connect("button_press_event", self._torrentstree_button_press)
+    torrentswin.add(torrentstree)
+
+    tidcolumn = gtk.TreeViewColumn("ID")
+    tidrenderer = gtk.CellRendererText()
+    tidcolumn.pack_start(tidrenderer)
+    tidcolumn.set_sort_column_id(0)
+    tidcolumn.add_attribute(tidrenderer, "text", 0)
+    torrentstree.append_column(tidcolumn)
+
+    thashcolumn = gtk.TreeViewColumn("Info Hash")
+    thashrenderer = gtk.CellRendererText()
+    thashcolumn.pack_start(thashrenderer)
+    thashcolumn.set_sort_column_id(1)
+    thashcolumn.add_attribute(thashrenderer, "text", 1)
+    torrentstree.append_column(thashcolumn)
+
+    tupdatedcolumn = gtk.TreeViewColumn("Updated")
+    tupdatedrenderer = gtk.CellRendererText()
+    tupdatedcolumn.pack_start(tupdatedrenderer)
+    tupdatedcolumn.set_sort_column_id(3)
+    tupdatedcolumn.add_attribute(tupdatedrenderer, "text", 2)
+    torrentstree.append_column(tupdatedcolumn)
 
     logpage = gtk.VBox()
     notebook.append_page(logpage, gtk.Label("Log"))
@@ -463,6 +489,9 @@ class Interface(gtk.Window):
   def _node_changed(self, router, hash):
     self._update_node_row(router.get_node_row(hash))
 
+  def _torrent_added(self, db, torrent):
+    self._add_torrent_row(db.get_torrent_row(hash))
+
   def _nodestree_button_press(self, treeview, event):
     if event.button == 3:
       x = int(event.x)
@@ -509,7 +538,7 @@ class Interface(gtk.Window):
   def _bucketstree_button_press(self, treeview, event):
     pass
 
-  def _torrent_added(self, peer, torrent):
+  def _torrentstree_button_press(self, treeview, event):
     pass
 
   def load_torrent(self, widget):
@@ -542,7 +571,7 @@ class Interface(gtk.Window):
 if __name__ == "__main__":
   gtk.gdk.threads_init()
   config = defaults.default_config
-  config.read('settings.cfg')
+  config.read(settings)
   app = Interface(config)
   app.show()
   gtk.main()
@@ -550,4 +579,4 @@ if __name__ == "__main__":
     app.destroy()
   except:
     pass
-  config.write(open('settings.cfg', 'w'))
+  config.write(open(settings, 'w'))

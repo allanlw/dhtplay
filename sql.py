@@ -3,6 +3,8 @@ import threading
 import Queue
 
 class SQLiteThread(threading.Thread):
+  """This is a class for sharing a SQLite connection between threads by using
+  a queue system."""
   _SCRIPT = -2
   _NO_RESULT = -1
   daemon = True
@@ -38,7 +40,8 @@ class SQLiteThread(threading.Thread):
           cursor.execute(stmt[1], stmt[2])
         else:
           cursor.execute(stmt[1])
-      except (sqlite3.OperationalError, sqlite3.ProgrammingError) as e:
+      except (sqlite3.OperationalError, sqlite3.ProgrammingError,
+              ValueError) as e:
         raise ValueError("Invalid SQL Statement - {0} ({1})".format(stmt, e))
       if stmt[0] >= 0:
         self.results.put((stmt[0], cursor.fetchall(), cursor.lastrowid))

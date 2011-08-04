@@ -24,6 +24,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+"""FreeBencode:A simple, lightweight bencode/bdecode library."""
+
 class BencodeError(StandardError):
   pass
 

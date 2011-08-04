@@ -1,4 +1,4 @@
-# These are the default settings that the application needs
+"""This module contains the default settings that the application needs."""
 
 import ConfigParser
 import io
