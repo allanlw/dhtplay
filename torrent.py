@@ -1,7 +1,7 @@
 import sqlite3
-import datetime
 import gobject
 import glib
+from datetime import datetime
 
 from net import ContactInfo, Hash
 
@@ -49,7 +49,7 @@ class TorrentDB(gobject.GObject):
                                (torrent.get_20(), ))
     if torrent_row is None:
       c.execute("INSERT INTO torrents VALUES (NULL, ?, ?, ?)",
-                (torrent.get_id_20(), now, now))
+                (torrent.get_20(), now, now))
       signal = "torrent-added"
     else:
       c.execute("UPDATE torrents SET updated=? WHERE id=?",

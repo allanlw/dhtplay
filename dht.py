@@ -99,21 +99,14 @@ class DHTRoutingTable(gobject.GObject):
                         (lower, upper, now, now))
     glib.idle_add(self.emit, "changed")
 
-  def _add_node(self, hash, contact, bucket, seed, time, pending=False):
-    if pending:
-      bid = None
-    else:
-      bid = bucket
-    id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?, ?, ?, ?, ?, ?)",
+  def _add_node(self, hash, contact, bucket, good, time, pending=False):
+    id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?,?,?,?,?,?,?)",
                           (hash.get_20(), contact.get_packed(),
-                           bid, seed, time, time))
+                           bucket, good, pending, time, time))
     glib.idle_add(self.emit, "node-added", hash)
     if not pending:
       self.conn.execute("UPDATE buckets SET updated=? WHERE id=?",
                         (time, bucket))
-    else:
-      self.conn.execute("INSERT INTO pending_nodes VALUES (NULL, ?, ?)",
-                        (id, bucket))
     glib.idle_add(self.emit, "bucket-changed", bucket)
     return id
 
@@ -123,14 +116,16 @@ class DHTRoutingTable(gobject.GObject):
 
   def _cull_bucket(self, now, bucket):
     rows = self.conn.select("""SELECT * FROM nodes
-                               WHERE bucket_id=?
+                               WHERE bucket_id=? AND NOT pending
                                ORDER BY updated ASC""",
                             (bucket,))
+    if len(rows) < MAX_BUCKET_SIZE:
+      return True
     culled = False
     for row in rows:
       if row["good"]:
         if (now - row["updated"]).seconds >= IDLE_TIMEOUT:
-          self.server.send_ping(contact.get_tuple())
+          self.server.send_ping(ContactInfo(row["contact"]).get_tuple())
       else:
         self._delete_node(row["id"], row["hash"])
         culled = True
@@ -146,11 +141,12 @@ class DHTRoutingTable(gobject.GObject):
     oldb = bucket_row["id"]
     glib.idle_add(self.emit, "bucket-split", oldb, newb)
 
-    rows = self.conn.select("SELECT id,hash FROM nodes WHERE bucket_id=?",
+    rows = self.conn.select("""SELECT id,hash,pending FROM nodes
+                               WHERE bucket_id=?""",
                             (oldb,))
     for row in rows:
       h = Hash(row[1])
-      if h.get_int() < bmid:
+      if h.get_int() >= bmid:
         self.conn.execute("UPDATE nodes SET bucket_id=? WHERE id=?",
                           (newb,row["id"]))
         glib.idle_add(self.emit, "node-changed", h)
@@ -218,26 +214,19 @@ class DHTRoutingTable(gobject.GObject):
   def refresh(self):
     now = datetime.now()
     self.conn.execute("DELETE FROM nodes WHERE NOT good")
-    rows = self.conn.select('''SELECT nodes.*, pending_nodes.* FROM nodes
-                               INNER JOIN pending_nodes
-                               ON nodes.id=pending_nodes.node_id''')
-
+    rows = self.conn.select("SELECT * FROM nodes WHERE pending")
     for row in rows:
-      if not (row["nodes.good"] and
-              (now - row["nodes.updated"]).seconds > IDLE_TIMEOUT):
-        self.conn.execute("DELETE FROM nodes WHERE id=?", (row["nodes.id"],))
-        self.conn.execute("DELETE FROM pending_nodes WHERE id=?",
-                          (row["pending_nodes.id"],))
+      if not (now - row["updated"]).seconds > IDLE_TIMEOUT:
+        self.conn.execute("DELETE FROM nodes WHERE id=?", (row["id"],))
       else:
-        culled = self._cull_bucket(now, row["pending_nodes.bucket_id"])
+        culled = self._cull_bucket(now, row["bucket_id"])
         if culled:
-          self.conn.execute("""UPDATE nodes SET bucket_id=?, updated=?
-                               WHERE id=?""",
-                            (row["pending_nodes.bucket_id"], now,
-                             row["nodes.id"]))
-          glib.idle_add(self.emit, "node-added", Hash(row["nodes.hash"]))
-          self.conn.execute("UPDATE buckets SET update=? WHERE id=?",
-                            (now, row["pending_nodes.bucket_id"]))
+          self.conn.execute("""UPDATE nodes SET bucket_id=?, pending=?,
+                               updated=? WHERE id=?""",
+                            (row["bucket_id"], False, now, row["id"]))
+          glib.idle_add(self.emit, "node-changed", Hash(row["nodes.hash"]))
+          self.conn.execute("UPDATE buckets SET updated=? WHERE id=?",
+                            (now, row["bucket_id"]))
           glib.idle_add(self.emit, "bucket-changed",
                         row["pending_nodes.bucket_id"])
 
@@ -248,7 +237,7 @@ class DHTRoutingTable(gobject.GObject):
 
   def _refresh_bucket(self, bucket):
     r = self.conn.select_one("""SELECT contact FROM nodes WHERE bucket_id=?
-                                ORDER BY random() LIMIT 1""",
+                                AND NOT pending ORDER BY random() LIMIT 1""",
                              (bucket,))
     if r is not None:
       self.server.send_ping(ContactInfo(r["contact"]).get_tuple())
@@ -398,7 +387,7 @@ class DHTServer(SocketServer.UDPServer):
   def _handle_get_peers(self, message, hash):
     if message["r"].has_key("values"):
       for n in message["r"]["values"]:
-        self.torrents.add_peer(ContactInfo(n), hash)
+        self.torrents.add_torrent(ContactInfo(n), hash)
     if message["r"].has_key("nodes"):
       self.add_nodes(message["r"]["nodes"])
     self.routingtable._handle_get_peers_response(Hash(message["r"]["id"]), message)

@@ -114,7 +114,7 @@ class Interface(gtk.Window):
     nodeswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
     nodespage.pack_start(nodeswin)
 
-    self.nodeslist = gtk.ListStore(int, str, int, str, str, float)
+    self.nodeslist = gtk.ListStore(int, str, int, str, str, float, bool)
     nodestree = gtk.TreeView(self.nodeslist)
     nodestree.connect("button_press_event", self._nodestree_button_press)
     nodeswin.add(nodestree)
@@ -125,6 +125,15 @@ class Interface(gtk.Window):
     bucketcolumn.set_sort_column_id(0)
     bucketcolumn.add_attribute(bucketrenderer, "text", 0)
     nodestree.append_column(bucketcolumn)
+
+    pendingcolumn = gtk.TreeViewColumn("Pending")
+    pendingrenderer = gtk.CellRendererToggle()
+    pendingrenderer.set_radio(False)
+    pendingrenderer.set_active(False)
+    pendingcolumn.pack_start(pendingrenderer)
+    pendingcolumn.set_sort_column_id(6)
+    pendingcolumn.add_attribute(pendingrenderer, "active", 6)
+    nodestree.append_column(pendingcolumn)
 
     hostcolumn = gtk.TreeViewColumn("Host")
     hostrenderer = gtk.CellRendererText()
@@ -142,6 +151,7 @@ class Interface(gtk.Window):
 
     hashcolumn = gtk.TreeViewColumn("Hash")
     hashrenderer = gtk.CellRendererText()
+    hashrenderer.set_property("family", "monospace")
     hashcolumn.pack_start(hashrenderer)
     hashcolumn.set_sort_column_id(3)
     hashcolumn.add_attribute(hashrenderer, "text", 3)
@@ -440,14 +450,19 @@ class Interface(gtk.Window):
       self.bucketslist.set(iter, 3, self.bucketslist.get(iter, 3)[0]+amt)
 
   def _add_node_row(self, row):
-    contact = ContactInfo(row["contact"])
+    try:
+      contact = ContactInfo(row["contact"])
+    except TypeError:
+      pass
     self.nodeslist.append((row["bucket_id"],
                            contact.host,
                            contact.port,
                            Hash(row["hash"]).get_hex(),
                            row["updated"].ctime(),
-                           time.mktime(row["updated"].timetuple())))
-    self._add_bucket_node(row["bucket_id"], +1)
+                           time.mktime(row["updated"].timetuple()),
+                           row["pending"]))
+    if not row["pending"]:
+      self._add_bucket_node(row["bucket_id"], +1)
 
   def _update_node_row(self, row):
     iter = self.nodeslist.get_iter(0)
@@ -456,13 +471,16 @@ class Interface(gtk.Window):
       iter = self.nodeslist.iter_next(iter)
     if iter is not None:
       contact = ContactInfo(row["contact"])
-      self._add_bucket_node(self.nodeslist.get(iter,0)[0], -1)
-      self.nodeslist.set(iter, 0, row["bucket_id"],
+      if not self.nodeslist.get(iter,6)[0]:
+        self._add_bucket_node(self.nodeslist.get(iter,0)[0], -1)
+      self.nodeslist.set(iter, 0, int(row["bucket_id"]),
                          1, contact.host, 2, contact.port,
                          3, Hash(row["hash"]).get_hex(),
                          4, row["updated"].ctime(),
-                         5, time.mktime(row["updated"].timetuple()))
-      self._add_bucket_node(row["bucket_id"], +1)
+                         5, time.mktime(row["updated"].timetuple()),
+                         6, row["pending"])
+      if not row["pending"]:
+        self._add_bucket_node(row["bucket_id"], +1)
 
   def _remove_node_row(self, row):
     iter = self.nodeslist.get_iter(0)
@@ -472,6 +490,11 @@ class Interface(gtk.Window):
     if iter is not None:
       self.nodeslist.remove(iter)
     self._add_bucket_node(self, row["bucket_id"], -1)
+
+  def _add_torrent_row(self, row):
+    self.nodeslist.append(row["id"], Hash(row["hash"]).get_hex(),
+                           row["updated"].ctime(),
+                           time.mktime(row["updated"].timetuple()))
 
   def _node_added(self, router, hash):
     self._add_node_row(router.get_node_row(hash))
@@ -489,7 +512,7 @@ class Interface(gtk.Window):
   def _node_changed(self, router, hash):
     self._update_node_row(router.get_node_row(hash))
 
-  def _torrent_added(self, db, torrent):
+  def _torrent_added(self, db, hash):
     self._add_torrent_row(db.get_torrent_row(hash))
 
   def _nodestree_button_press(self, treeview, event):

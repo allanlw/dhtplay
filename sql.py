@@ -80,3 +80,4 @@ class SQLiteThread(threading.Thread):
         return res
   def close(self):
     self._stopped = True
+    self.join()

@@ -21,7 +21,7 @@ class Hash:
     elif isinstance(self.id, Hash):
       self.id = id.id
   def get_hex(self):
-    return "{0:x}".format(self.id)
+    return "{0:040x}".format(self.id)
   def get_20(self):
     id = self.id
     result = ""
@@ -29,7 +29,7 @@ class Hash:
       result = chr(id % 256) + result
       id = id >> 8
     while len(result) < 20:
-      result = "\0" + result
+      result = "\x00" + result
     return buffer(result)
   def get_int(self):
     return self.id

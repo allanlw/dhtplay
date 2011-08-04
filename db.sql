@@ -10,19 +10,12 @@ CREATE TABLE IF NOT EXISTS nodes (
   id INTEGER PRIMARY KEY NOT NULL,
   hash BLOB NOT NULL,
   contact BLOB NOT NULL,
-  bucket_id INTEGER,
+  bucket_id INTEGER NOT NULL,
   good BOOLEAN NOT NULL,
+  pending BOOLEAN NOT NULL,
   created timestamp NOT NULL,
   updated timestamp NOT NULL,
 
-  FOREIGN KEY(bucket_id) REFERENCES buckets(id)
-);
-CREATE TABLE IF NOT EXISTS pending_nodes (
-  id INTEGER PRIMARY KEY NOT NULL,
-  node_id INTEGER NOT NULL,
-  bucket_id INTEGER NOT NULL,
-
-  FOREIGN KEY(node_id) REFERENCES nodes(id),
   FOREIGN KEY(bucket_id) REFERENCES buckets(id)
 );
 CREATE TABLE IF NOT EXISTS peers (
