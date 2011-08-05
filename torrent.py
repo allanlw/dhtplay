@@ -9,11 +9,11 @@ class TorrentDB(gobject.GObject):
   __gsignals__ = {
     "torrent-added":
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
-    "torrent-updated":
+    "torrent-changed":
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
     "peer-added":
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
-    "peer-updated":
+    "peer-changed":
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,)),
     "peer-torrent-added":
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
@@ -22,9 +22,16 @@ class TorrentDB(gobject.GObject):
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
        (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT))
   }
-  def __init__(self, conn):
+  def __init__(self, server, conn):
     gobject.GObject.__init__(self)
     self.conn = conn
+    self.server = server
+
+  def do_torrent_added(self, torrent):
+    self.server._log("Torrent added to db ({0})".format(torrent))
+
+  def do_peer_added(self, peer):
+    self.server._log("Peer added to db ({0})".format(peer))
 
   def add_torrent(self, peer, torrent, seed=False):
     now = datetime.now()
@@ -39,7 +46,7 @@ class TorrentDB(gobject.GObject):
     else:
       c.execute("UPDATE peers SET updated=? WHERE id=?",
                 (now, peer_row["id"]))
-      signal = "peer-updated"
+      signal = "peer-changed"
 
     peer_row = c.select_one("SELECT * FROM peers WHERE contact=? LIMIT 1",
                             (peer.get_packed(), ))
@@ -54,7 +61,7 @@ class TorrentDB(gobject.GObject):
     else:
       c.execute("UPDATE torrents SET updated=? WHERE id=?",
                 (now, torrent_row["id"]))
-      signal = "torrent-updated"
+      signal = "torrent-changed"
 
     torrent_row = c.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
                                (torrent.get_20(),))
@@ -85,6 +92,10 @@ class TorrentDB(gobject.GObject):
   def get_torrent_row(self, hash):
     return self.conn.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
                                 (hash.get_20(),))
-  def get_node_row(self, contact):
-    return self.conn.select_one("SELECT * FROM peers WHERE hash=? LIMIT 1",
-                                (hash.get_packed(),))
+  def get_peer_row(self, contact):
+    return self.conn.select_one("SELECT * FROM peers WHERE contact=? LIMIT 1",
+                                (contact.get_packed(),))
+  def get_torrent_rows(self):
+    return self.conn.select("SELECT * FROM torrents")
+  def get_peer_rows(self):
+    return self.conn.select("SELECT * FROM peers")

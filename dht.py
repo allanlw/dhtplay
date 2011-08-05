@@ -202,22 +202,24 @@ class DHTRoutingTable(gobject.GObject):
   def get_bucket_rows(self):
     return self.conn.select("SELECT * FROM buckets")
   def do_bucket_split(self, bucket1, bucket2):
+    self.server._log("Bucket split ({0}, {1})".format(bucket1, bucket2))
     self.emit("changed")
   def do_bucket_changed(self, bucket):
     self.emit("changed")
   def do_node_added(self, node):
+    self.server._log("Node added to db ({0})".format(node))
     self.emit("changed")
   def do_node_changed(self, node):
     self.emit("changed")
   def do_node_removed(self, node):
+    self.server._log("Node removed from db ({0})".format(node))
     self.emit("changed")
   def refresh(self):
     now = datetime.now()
-    self.conn.execute("DELETE FROM nodes WHERE NOT good")
     rows = self.conn.select("SELECT * FROM nodes WHERE pending")
     for row in rows:
-      if not (now - row["updated"]).seconds > IDLE_TIMEOUT:
-        self.conn.execute("DELETE FROM nodes WHERE id=?", (row["id"],))
+      if not (now - row["updated"]).seconds < IDLE_TIMEOUT or not row["good"]:
+        self._delete_node(row["id"], row["hash"])
       else:
         culled = self._cull_bucket(now, row["bucket_id"])
         if culled:
@@ -254,15 +256,13 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
   def handle(self):
     enc_message = self.rfile.read()
     if not enc_message:
-      if self.server.logfunc:
-        self.server.logfunc("From "+str(self.client_address)+":None")
+      self.server._log("From "+str(self.client_address)+":None")
       return
     message = bdecode(enc_message)[0]
     if message.has_key("q") and message["q"] == "refresh":
       self.server._update()
       return
-    if self.server.logfunc:
-      self.server.logfunc("From "+str(self.client_address)+":"+str(message))
+    self.server._log("From "+str(self.client_address)+":"+str(message))
     if message["y"] == "r":
       self.server.routingtable.add_node(ContactInfo(*self.client_address),
                                         Hash(message["r"]["id"]))
@@ -274,8 +274,7 @@ class DHTServer(SocketServer.UDPServer):
   allow_reuse_address = True
   def __init__(self, config, id = None, bind=("127.0.0.1", 6881), logfunc=None):
     self.logfunc = logfunc
-    if self.logfunc:
-      self.logfunc("Server Starting...")
+    self._log("Server Starting...")
 
     SocketServer.UDPServer.__init__(self, bind, DHTRequestHandler)
     self.last_tid = 0
@@ -284,20 +283,20 @@ class DHTServer(SocketServer.UDPServer):
     self.conn = SQLiteThread(self.config.get("torrent", "db"))
     self.conn.start()
     self.conn.executescript(open("db.sql","r").read())
-    self.torrents = TorrentDB(self.conn)
+    self.torrents = TorrentDB(self, self.conn)
     self.id = Hash(id)
     self.timeout_id = glib.timeout_add_seconds(REFRESH_CHECK,
                                                self._send_update)
     self.routingtable = DHTRoutingTable(self, self.conn)
+    self.updatesocket = socket.socket(socket.AF_INET,
+                                      socket.SOCK_DGRAM)
 
-    if self.logfunc:
-      self.logfunc("Server Started.")
-    self._update()
+    self._log("Server Started.")
   def next_tid(self):
     self.last_tid += 1
-    if (self.last_tid >= 2**16):
+    if (self.last_tid >= 2<<16):
       self.last_tid = 0
-    return chr(self.last_tid/(2<<8))+chr(self.last_tid%(2<<8))
+    return chr(self.last_tid/((2<<8)-1))+chr(self.last_tid%((2<<8)-1))
 
   def send_query(self, to, name, args):
     query = {"y":"q", "t":self.next_tid(), "q":name, "a":args}
@@ -312,17 +311,15 @@ class DHTServer(SocketServer.UDPServer):
     self.send_msg(to, error)
     return error["t"]
   def send_msg(self, to, msg):
-    if self.logfunc:
-      self.logfunc("Sending message to "+str(to) +" - "+str(msg))
+    self._log("Sending message to "+str(to) +" - "+str(msg))
     enc_msg = bencode(msg)
     try:
       self.socket.sendto(enc_msg, to)
     except socket.error as (errno, strerror):
-      if self.logfunc:
-        self.logfunc("Error sending message to "+str(to))
+      self._log("Error sending message to "+str(to))
       return
     if self.logfunc:
-      self.logfunc("Message sent to "+str(to))
+      self._log("Message sent to "+str(to))
 
   def add_callback(self, tid, func):
     if self.callbacks.has_key(tid):
@@ -330,15 +327,13 @@ class DHTServer(SocketServer.UDPServer):
     else:
       self.callbacks[tid] = [func]
   def shutdown(self):
-    if self.logfunc:
-      self.logfunc("Server Stopping...")
+    self._log("Server Stopping...")
     glib.source_remove(self.timeout_id)
     SocketServer.UDPServer.shutdown(self)
     self.torrents.close()
     self.routingtable.close()
     self.conn.close()
-    if self.logfunc:
-      self.logfunc("Server Stopped.")
+    self._log("Server Stopped.")
   def add_nodes(self, nodes):
     while nodes:
       contact = nodes[0:26]
@@ -351,8 +346,7 @@ class DHTServer(SocketServer.UDPServer):
     traceback.print_exc() # XXX But this goes to stderr!
 
   def send_ping(self, to):
-    if self.logfunc:
-      self.logfunc("Sending ping to "+str(to))
+    self._log("Sending ping to "+str(to))
     result = self.send_query(to, "ping", {"id": self.id.get_20()})
     self.add_callback(result, self._handle_ping_node)
     return result
@@ -363,8 +357,7 @@ class DHTServer(SocketServer.UDPServer):
       self.routingtable._handle_ping_response(id, message)
 
   def send_find_node(self, to, hash):
-    if self.logfunc:
-      self.logfunc("Sending find_node to "+str(to)+" with hash "+hash)
+    self._log("Sending find_node to "+str(to)+" with hash "+hash)
     tid = Hash(hash)
     result = self.send_query(to, "find_node", {"id": self.id.get_20(),
                                                "target": tid.get_20()})
@@ -377,8 +370,7 @@ class DHTServer(SocketServer.UDPServer):
     self.routingtable._handle_find_response(id, message)
 
   def send_get_peers(self, to, hash):
-    if self.logfunc:
-      self.logfunc("Sending get_peers to "+str(to)+" with hash "+hash)
+    self._log("Sending get_peers to "+str(to)+" with hash "+hash)
     hash = Hash(hash)
     result = self.send_query(to, "get_peers", {"id": self.id.get_20(),
                                           "info_hash": hash.get_20()})
@@ -401,14 +393,18 @@ class DHTServer(SocketServer.UDPServer):
       self.send_ping(tuple(n))
 
   def _update(self):
-    if self.logfunc:
-      self.logfunc("Updating routing table...")
+    """Actually do an update from within the server thread."""
+    self._log("Updating routing table...")
     self.routingtable.refresh()
-    if self.logfunc:
-      self.logfunc("Routing table updated.")
+    self._log("Routing table updated.")
     return True
 
   def _send_update(self):
-#    msg = bencode({"y":"q", "q":"refresh", "t":"", "a":[]})
-#    self.socket.sendto(msg, self.socket.getsockname()) 
-    self.routingtable.refresh()
+    """Bootstrap an update from the main GUI thread by sending a UDP packet."""
+    msg = bencode({"y":"q", "q":"refresh", "t":"", "a":[]})
+    self.updatesocket.sendto(msg, self.socket.getsockname()) 
+#    self.routingtable.refresh()
+
+  def _log(self, msg):
+    if self.logfunc:
+      self.logfunc(msg)

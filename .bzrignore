@@ -6,3 +6,4 @@ settings.cfg
 test.torrent
 torrents.sqlite
 torrents.db
+torrents.db-journal

@@ -19,8 +19,7 @@ class SQLiteThread(threading.Thread):
   def run(self):
     conn = sqlite3.connect(self.db,
                         detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES,
-                        check_same_thread=True,
-                        isolation_level=None)
+                        check_same_thread=True)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     while 1:

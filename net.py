@@ -36,7 +36,7 @@ class Hash:
   def __int__(self):
     return self.get_int()
   def __str__(self):
-    return self.get_20()
+    return self.get_hex()
   def __long__(self):
     return self.get_int()
   def distance(self, other):
@@ -64,3 +64,5 @@ class ContactInfo:
     result = socket.inet_pton(socket.AF_INET, self.host)
     result += chr(self.port >> 8) + chr(self.port % 256)
     return buffer(result)
+  def __str__(self):
+    return "{0}:{1}".format(self.host, self.port)
