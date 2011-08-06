@@ -211,16 +211,17 @@ class Interface(gtk.Window):
     btimecolumn.add_attribute(btimerenderer, "text", 4)
     bucketstree.append_column(btimecolumn)
 
-    torrentspage = gtk.VBox()
-    notebook.append_page(torrentspage, gtk.Label("Torrents"))
+    torrentspane = gtk.VPaned()
+    notebook.append_page(torrentspane, gtk.Label("Torrents"))
 
     torrentswin = gtk.ScrolledWindow()
     torrentswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    torrentspage.pack_start(torrentswin, True, True)
+    torrentspane.pack1(torrentswin, True, True)
 
     self.torrentslist = gtk.ListStore(int, str, str, float)
     torrentstree = gtk.TreeView(self.torrentslist)
     torrentstree.connect("button_press_event", self._torrentstree_button_press)
+    torrentstree.connect("cursor-changed", self._torrentstree_cursor_changed)
     torrentswin.add(torrentstree)
 
     tidcolumn = gtk.TreeViewColumn("ID")
@@ -244,6 +245,20 @@ class Interface(gtk.Window):
     tupdatedcolumn.add_attribute(tupdatedrenderer, "text", 2)
     torrentstree.append_column(tupdatedcolumn)
 
+    torrentsinfo = gtk.VBox()
+    torrentspane.pack2(torrentsinfo, True, True)
+
+    torrentsinfo.pack_start(gtk.Label("Torrent Info:"), False, False)
+
+    torrentspeerswin = gtk.ScrolledWindow()
+    torrentspeerswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+    torrentsinfo.pack_start(torrentspeerswin, True, True)
+
+    torrentspeerstree = self._make_peers_view()
+    torrentspeerstree.connect("button_press_event",
+                              self._torrentspeerstree_button_press)
+    torrentspeerswin.add(torrentspeerstree)
+
     peerspage = gtk.VBox()
     notebook.append_page(peerspage, gtk.Label("Peers"))
 
@@ -252,9 +267,44 @@ class Interface(gtk.Window):
     peerspage.pack_start(peerswin, True, True)
 
     self.peerslist = gtk.ListStore(int, str, int, str, float)
-    peerstree = gtk.TreeView(self.peerslist)
+    peerstree = self._make_peers_view()
+    peerstree.set_model(self.peerslist)
     peerstree.connect("button_press_event", self._peerstree_button_press)
     peerswin.add(peerstree)
+
+    logpage = gtk.VBox()
+    notebook.append_page(logpage, gtk.Label("Log"))
+
+    logwin = gtk.ScrolledWindow()
+    logwin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+    logpage.pack_start(logwin, True, True)
+
+    self.logbuffer = gtk.TextBuffer()
+    self.logview = gtk.TextView(self.logbuffer)
+    self.logview.set_wrap_mode(gtk.WRAP_NONE)
+    self.logview.set_editable(True)
+    self.logview.set_cursor_visible(False)
+    logwin.add(self.logview)
+
+    self.statusbar = gtk.Statusbar()
+    vbox.pack_end(self.statusbar, False, False)
+
+    self.started_only.set_sensitive(False)
+
+    self.torrentspeerslist = self.peerslist.filter_new()
+    vis = (lambda model, iter, data:
+             model.get_value(iter,0) in data)
+    self.torrentspeersdata = set()
+    self.torrentspeerslist.set_visible_func(vis, self.torrentspeersdata)
+    torrentspeerstree.set_model(self.torrentspeerslist)
+
+    self.show_all()
+    self.hide()
+
+    self._do_log("Application Initiated.")
+
+  def _make_peers_view(self):
+    peerstree = gtk.TreeView()
 
     pidcolumn = gtk.TreeViewColumn("ID")
     pidrenderer = gtk.CellRendererText()
@@ -284,29 +334,7 @@ class Interface(gtk.Window):
     pupdatedcolumn.add_attribute(pupdatedrenderer, "text", 3)
     peerstree.append_column(pupdatedcolumn)
 
-    logpage = gtk.VBox()
-    notebook.append_page(logpage, gtk.Label("Log"))
-
-    logwin = gtk.ScrolledWindow()
-    logwin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    logpage.pack_start(logwin, True, True)
-
-    self.logbuffer = gtk.TextBuffer()
-    self.logview = gtk.TextView(self.logbuffer)
-    self.logview.set_wrap_mode(gtk.WRAP_NONE)
-    self.logview.set_editable(True)
-    self.logview.set_cursor_visible(False)
-    logwin.add(self.logview)
-
-    self.statusbar = gtk.Statusbar()
-    vbox.pack_end(self.statusbar, False, False)
-
-    self.started_only.set_sensitive(False)
-
-    self.show_all()
-    self.hide()
-
-    self._do_log("Application Initiated.")
+    return peerstree
 
   def _cleanup(self, widget, event):
     gtk.main_quit()
@@ -543,7 +571,7 @@ class Interface(gtk.Window):
                            time.mktime(row["updated"].timetuple())))
 
   def _add_peer_row(self, row):
-    c= ContactInfo(row["contact"])
+    c=ContactInfo(row["contact"])
     self.peerslist.append((row["id"], c.host, c.port,
                            row["updated"].ctime(),
                            time.mktime(row["updated"].timetuple()))) 
@@ -634,8 +662,20 @@ class Interface(gtk.Window):
   def _torrentstree_button_press(self, treeview, event):
     pass
 
+  def _torrentspeerstree_button_press(self, treeview, event):
+    pass
+
   def _peerstree_button_press(self, treeview, event):
     pass
+
+  def _torrentstree_cursor_changed(self, treeview):
+    iter = self.torrentslist.get_iter(treeview.get_cursor()[0])
+    id = self.torrentslist.get_value(iter, 0)
+    self.torrentspeersdata.clear()
+    if self.server:
+      peers = self.server.torrents.get_torrent_peers(id)
+      self.torrentspeersdata.update(p[0] for p in peers)
+    self.torrentspeerslist.refilter()
 
   def load_torrent(self, widget):
     dialog = gtk.FileChooserDialog("Choose a torrent", self,

@@ -99,3 +99,6 @@ class TorrentDB(gobject.GObject):
     return self.conn.select("SELECT * FROM torrents")
   def get_peer_rows(self):
     return self.conn.select("SELECT * FROM peers")
+  def get_torrent_peers(self, id):
+    return self.conn.select("""SELECT peer_torrents.peer_id FROM peer_torrents
+                               WHERE peer_torrents.torrent_id=?""", (id,))

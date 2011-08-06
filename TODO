@@ -7,3 +7,4 @@ TODO:
 * Add sending scrape support
 * swap find_peers and get_nodes in context menu for tree view right click
 * add exit to file menu
+* fixing sorting problem for sub-view with torrents
