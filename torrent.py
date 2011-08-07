@@ -3,7 +3,8 @@ import gobject
 import glib
 from datetime import datetime
 
-from net import ContactInfo, Hash
+from sha1hash import Hash
+from contactinfo import ContactInfo
 
 class TorrentDB(gobject.GObject):
   __gsignals__ = {
@@ -102,3 +103,6 @@ class TorrentDB(gobject.GObject):
   def get_torrent_peers(self, id):
     return self.conn.select("""SELECT peer_torrents.peer_id FROM peer_torrents
                                WHERE peer_torrents.torrent_id=?""", (id,))
+  def get_peer_torrents(self, id):
+    return self.conn.select("""SELECT peer_torrents.torrent_id FROM peer_torrents
+                               WHERE peer_torrents.peer_id=?""", (id,))

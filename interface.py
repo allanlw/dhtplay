@@ -5,10 +5,11 @@ import glib
 import threading
 import time
 
-import dht
+from server import DHTServer
 import defaults
 import dialogs
-from net import ContactInfo, Hash
+from contactinfo import ContactInfo
+from sha1hash import Hash
 
 name = "DHTPlay"
 
@@ -44,6 +45,10 @@ class Interface(gtk.Window):
     stop_action.connect("activate", self.stop_server)
     self.started_only.add_action(stop_action)
 
+    quit_action = gtk.Action("quit", "Quit",
+                             "Quit", gtk.STOCK_QUIT)
+    quit_action.connect("activate", self.quit)
+
     ping_action = gtk.Action("ping", "Ping Node...",
                              "Ping a DHT Node", gtk.STOCK_REFRESH)
     ping_action.connect("activate", self.ping_node)
@@ -78,6 +83,8 @@ class Interface(gtk.Window):
 
     file_menu.add(start_action.create_menu_item())
     file_menu.add(stop_action.create_menu_item())
+    file_menu.add(gtk.SeparatorMenuItem())
+    file_menu.add(quit_action.create_menu_item())
 
     tools_menuitem = gtk.MenuItem("Tools")
     menubar.add(tools_menuitem)
@@ -107,12 +114,9 @@ class Interface(gtk.Window):
     notebook = gtk.Notebook()
     vbox.pack_start(notebook, True, True)
 
-    nodespage = gtk.VBox()
-    notebook.append_page(nodespage, gtk.Label("Nodes"))
-
     nodeswin = gtk.ScrolledWindow()
     nodeswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    nodespage.pack_start(nodeswin)
+    notebook.append_page(nodeswin, gtk.Label("Nodes"))
 
     self.nodeslist = gtk.ListStore(int, str, int, str, str, float, bool)
     nodestree = gtk.TreeView(self.nodeslist)
@@ -164,12 +168,9 @@ class Interface(gtk.Window):
     timecolumn.add_attribute(timerenderer, "text", 4)
     nodestree.append_column(timecolumn)
 
-    bucketspage = gtk.VBox()
-    notebook.append_page(bucketspage, gtk.Label("Buckets"))
-
     bucketswin = gtk.ScrolledWindow()
     bucketswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    bucketspage.pack_start(bucketswin, True, True)
+    notebook.append_page(bucketswin, gtk.Label("Buckets"))
 
     self.bucketslist = gtk.ListStore(int, float, float, int, str, float)
     bucketstree = gtk.TreeView(self.bucketslist)
@@ -219,65 +220,47 @@ class Interface(gtk.Window):
     torrentspane.pack1(torrentswin, True, True)
 
     self.torrentslist = gtk.ListStore(int, str, str, float)
-    torrentstree = gtk.TreeView(self.torrentslist)
+    torrentstree = self._make_torrents_view()
     torrentstree.connect("button_press_event", self._torrentstree_button_press)
     torrentstree.connect("cursor-changed", self._torrentstree_cursor_changed)
+    torrentstree.set_model(self.torrentslist)
     torrentswin.add(torrentstree)
-
-    tidcolumn = gtk.TreeViewColumn("ID")
-    tidrenderer = gtk.CellRendererText()
-    tidcolumn.pack_start(tidrenderer)
-    tidcolumn.set_sort_column_id(0)
-    tidcolumn.add_attribute(tidrenderer, "text", 0)
-    torrentstree.append_column(tidcolumn)
-
-    thashcolumn = gtk.TreeViewColumn("Info Hash")
-    thashrenderer = gtk.CellRendererText()
-    thashcolumn.pack_start(thashrenderer)
-    thashcolumn.set_sort_column_id(1)
-    thashcolumn.add_attribute(thashrenderer, "text", 1)
-    torrentstree.append_column(thashcolumn)
-
-    tupdatedcolumn = gtk.TreeViewColumn("Updated")
-    tupdatedrenderer = gtk.CellRendererText()
-    tupdatedcolumn.pack_start(tupdatedrenderer)
-    tupdatedcolumn.set_sort_column_id(3)
-    tupdatedcolumn.add_attribute(tupdatedrenderer, "text", 2)
-    torrentstree.append_column(tupdatedcolumn)
-
-    torrentsinfo = gtk.VBox()
-    torrentspane.pack2(torrentsinfo, True, True)
-
-    torrentsinfo.pack_start(gtk.Label("Torrent Info:"), False, False)
 
     torrentspeerswin = gtk.ScrolledWindow()
     torrentspeerswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    torrentsinfo.pack_start(torrentspeerswin, True, True)
+    torrentspane.pack2(torrentspeerswin, True, True)
 
     torrentspeerstree = self._make_peers_view()
     torrentspeerstree.connect("button_press_event",
-                              self._torrentspeerstree_button_press)
+                              self._peerstree_button_press)
     torrentspeerswin.add(torrentspeerstree)
 
-    peerspage = gtk.VBox()
-    notebook.append_page(peerspage, gtk.Label("Peers"))
+    peerspane = gtk.VPaned()
+    notebook.append_page(peerspane, gtk.Label("Peers"))
 
     peerswin = gtk.ScrolledWindow()
     peerswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    peerspage.pack_start(peerswin, True, True)
+    peerspane.pack1(peerswin, True, True)
 
     self.peerslist = gtk.ListStore(int, str, int, str, float)
     peerstree = self._make_peers_view()
     peerstree.set_model(self.peerslist)
     peerstree.connect("button_press_event", self._peerstree_button_press)
+    peerstree.connect("cursor-changed", self._peerstree_cursor_changed)
     peerswin.add(peerstree)
 
-    logpage = gtk.VBox()
-    notebook.append_page(logpage, gtk.Label("Log"))
+    peerstorrentswin = gtk.ScrolledWindow()
+    peerstorrentswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+    peerspane.pack2(peerstorrentswin, True, True)
+
+    peerstorrentstree = self._make_torrents_view()
+    peerstorrentstree.connect("button_press_event",
+                              self._torrentstree_button_press)
+    peerstorrentswin.add(peerstorrentstree)
 
     logwin = gtk.ScrolledWindow()
     logwin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    logpage.pack_start(logwin, True, True)
+    notebook.append_page(logwin, gtk.Label("Log"))
 
     self.logbuffer = gtk.TextBuffer()
     self.logview = gtk.TextView(self.logbuffer)
@@ -297,6 +280,11 @@ class Interface(gtk.Window):
     self.torrentspeersdata = set()
     self.torrentspeerslist.set_visible_func(vis, self.torrentspeersdata)
     torrentspeerstree.set_model(self.torrentspeerslist)
+
+    self.peerstorrentslist = self.torrentslist.filter_new()
+    self.peerstorrentsdata = set()
+    self.peerstorrentslist.set_visible_func(vis, self.peerstorrentsdata)
+    peerstorrentstree.set_model(self.peerstorrentslist)
 
     self.show_all()
     self.hide()
@@ -336,7 +324,38 @@ class Interface(gtk.Window):
 
     return peerstree
 
-  def _cleanup(self, widget, event):
+  def _make_torrents_view(self):
+    torrentstree = gtk.TreeView()
+
+    tidcolumn = gtk.TreeViewColumn("ID")
+    tidrenderer = gtk.CellRendererText()
+    tidcolumn.pack_start(tidrenderer)
+    tidcolumn.set_sort_column_id(0)
+    tidcolumn.add_attribute(tidrenderer, "text", 0)
+    torrentstree.append_column(tidcolumn)
+
+    thashcolumn = gtk.TreeViewColumn("Info Hash")
+    thashrenderer = gtk.CellRendererText()
+    thashcolumn.pack_start(thashrenderer)
+    thashcolumn.set_sort_column_id(1)
+    thashcolumn.add_attribute(thashrenderer, "text", 1)
+    torrentstree.append_column(thashcolumn)
+
+    tupdatedcolumn = gtk.TreeViewColumn("Updated")
+    tupdatedrenderer = gtk.CellRendererText()
+    tupdatedcolumn.pack_start(tupdatedrenderer)
+    tupdatedcolumn.set_sort_column_id(3)
+    tupdatedcolumn.add_attribute(tupdatedrenderer, "text", 2)
+    torrentstree.append_column(tupdatedcolumn)
+
+    return torrentstree
+
+  def quit(self, widget=None, event=None):
+    self._cleanup()
+
+  def _cleanup(self, widget=None, event=None):
+    if self.server:
+      self.stop_server()
     gtk.main_quit()
 
   def startstop_server(self, widget=None):
@@ -370,7 +389,7 @@ class Interface(gtk.Window):
       self.stopped_only.set_sensitive(False)
 
   def _bootstrap_server(self, hash, host, port):
-    self.server = dht.DHTServer(self.cfg, hash, (host, port), self._do_log)
+    self.server = DHTServer(self.cfg, hash, (host, port), self._do_log)
     self.server.routingtable.connect("node-added", self._node_added)
     self.server.routingtable.connect("node-removed", self._node_removed)
     self.server.routingtable.connect("bucket-split", self._bucket_split)
@@ -392,6 +411,8 @@ class Interface(gtk.Window):
 
     self.nodeslist.clear()
     self.bucketslist.clear()
+    self.torrentslist.clear()
+    self.peerslist.clear()
 
   def ping_node(self, widget=None, host=None, port=None):
     if not self.server:
@@ -465,6 +486,24 @@ class Interface(gtk.Window):
       self.cfg.set("last", "get_peers_hash", hash)
 
       self.server.send_get_peers((host, port), hash)
+
+  def load_torrent(self, widget):
+    dialog = gtk.FileChooserDialog("Choose a torrent", self,
+                                   gtk.FILE_CHOOSER_ACTION_OPEN,
+                                   (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                                    gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+    torrent_filter = gtk.FileFilter()
+    torrent_filter.set_name("Torrent Metainfo File")
+    torrent_filter.add_pattern("*.torrent")
+
+    response = dialog.run()
+    if response == gtk.RESPONSE_OK:
+      file = dialog.get_filename()
+      try:
+        self.server.load_torrent(file)
+      except Exception as err:
+        self.error("Could not load nodes from torrent.\n\nReason:" + str(err))
+    dialog.destroy()
 
   def _do_log(self, message):
     glib.idle_add(self.log, message)
@@ -662,9 +701,6 @@ class Interface(gtk.Window):
   def _torrentstree_button_press(self, treeview, event):
     pass
 
-  def _torrentspeerstree_button_press(self, treeview, event):
-    pass
-
   def _peerstree_button_press(self, treeview, event):
     pass
 
@@ -677,23 +713,14 @@ class Interface(gtk.Window):
       self.torrentspeersdata.update(p[0] for p in peers)
     self.torrentspeerslist.refilter()
 
-  def load_torrent(self, widget):
-    dialog = gtk.FileChooserDialog("Choose a torrent", self,
-                                   gtk.FILE_CHOOSER_ACTION_OPEN,
-                                   (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                                    gtk.STOCK_OPEN, gtk.RESPONSE_OK))
-    torrent_filter = gtk.FileFilter()
-    torrent_filter.set_name("Torrent Metainfo File")
-    torrent_filter.add_pattern("*.torrent")
-
-    response = dialog.run()
-    if response == gtk.RESPONSE_OK:
-      file = dialog.get_filename()
-      try:
-        self.server.load_torrent(file)
-      except Exception as err:
-        self.error("Could not load nodes from torrent.\n\nReason:" + str(err))
-    dialog.destroy()
+  def _peerstree_cursor_changed(self, treeview):
+    iter = self.peerslist.get_iter(treeview.get_cursor()[0])
+    id = self.peerslist.get_value(iter, 0)
+    self.peerstorrentsdata.clear()
+    if self.server:
+      torrents = self.server.torrents.get_peer_torrents(id)
+      self.peerstorrentsdata.update(t[0] for t in torrents)
+    self.peerstorrentslist.refilter()
 
   def error(self, message):
     dialog = gtk.MessageDialog(self,
