@@ -368,6 +368,7 @@ class Interface(gtk.Window):
       self.stop_server()
     if self.upnp:
       self.upnp.shutdown()
+    gtk.main_iteration(False)
     gtk.main_quit()
 
   def startstop_server(self, widget=None):
@@ -385,7 +386,6 @@ class Interface(gtk.Window):
                                   upnp.HAVE_UPNP)
 
     response = dialog.run()
-
     dialog.destroy()
     if response is not None:
       bind_addr, bind_port, hash, use_upnp, host, port = response
@@ -402,37 +402,42 @@ class Interface(gtk.Window):
 
       if use_upnp:
         self.upnp = upnp.UPNPManager()
-        self.upnp.connect("port-added", self._do_port_added, hash)
+        self.upnp.connect("port-added", lambda w,x,y:
+          self._do_port_added(w,x,y,hash))
         self.upnp.connect("add-port-error", self._do_add_port_error)
         self.upnp.add_udp_port(bind)
       else:
-        self._start_server(bind, serv)
+        self._start_server(bind, serv, hash)
   def _do_add_port_error(self, manager, error):
-    mdialog = gtk.MessageDialog(self,
-                                gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
-                                gtk.MESSAGE_ERROR,
-                                gtk.BUTTONS_OK,
-                                "Error forwarding UPnP port: {0}".format(error))
-    mdialog.run()
-    mdialog.destroy()
-    self.upnp.shutdown()
-    self.upnp = None
-    self.start_server()
+    # see comment in _do_port_added
+    with gtk.gdk.lock:
+      mdialog = gtk.MessageDialog(self,
+                                  gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
+                                  gtk.MESSAGE_ERROR,
+                                  gtk.BUTTONS_OK,
+                                  "Error forwarding UPnP port: {0}".format(error))
+      mdialog.run()
+      mdialog.destroy()
+      self.upnp.shutdown()
+      self.upnp = None
+      glib.idle_add(self.start_server)
   def _do_port_added(self, manager, external, internal, hash):
-    if self.server is not None:
-      return
-    mdialog = gtk.MessageDialog(self,
-                                gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
-                                gtk.MESSAGE_QUESTION,
-                                gtk.BUTTONS_OK_CANCEL,
-                                "UPnP forwarded succesfully. Start server on {0:s} bound to {1:s}?".format(external, internal))
-    response = mdialog.run()
-    print response
-    if response == gtk.RESPONSE_OK:
-      self._start_server(internal, external, hash)
-    print "LOL!"
-    mdialog.destroy()
-    print "!!!"
+    # I am going to be completely honest and admit that I have
+    # ABSOLUTELY NO IDEA why I need to grab the gtk.gdk thread lock here
+    # but it will hang if I do not.
+    # Hypothesis: gupnp.igd.Simple is not using the same GMainContext as I am?
+    with gtk.gdk.lock:
+      if self.server is not None:
+        return
+      mdialog = gtk.MessageDialog(self,
+                                  gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
+                                  gtk.MESSAGE_QUESTION,
+                                  gtk.BUTTONS_OK_CANCEL,
+                                  "UPnP forwarded succesfully. Start server on {0:s} bound to {1:s}?".format(external, internal))
+      response = mdialog.run()
+      mdialog.destroy()
+      if response == gtk.RESPONSE_OK:
+        self._start_server(internal, external, hash)
   def _start_server(self, internal, external, hash):
     self.server_thread = threading.Thread(target=lambda:
       self._bootstrap_server(hash, internal, external))
@@ -457,7 +462,6 @@ class Interface(gtk.Window):
     glib.idle_add(self.serverstatus.set_status, True)
 
     self.server.serve_forever()
-
   def stop_server(self, widget=None):
     self.netstatus.detach_prop()
 
@@ -475,8 +479,9 @@ class Interface(gtk.Window):
 
     self.serverstatus.set_status(False)
 
-    self.upnp.shutdown()
-    self.upnp = None
+    if self.upnp is not None:
+      self.upnp.shutdown()
+      self.upnp = None
 
   def ping_node(self, widget=None, host=None, port=None):
     if not self.server:
@@ -492,7 +497,7 @@ class Interface(gtk.Window):
     dialog = dialogs.HostDialog(self, "Ping Node...", host, port)
 
     response = dialog.run()
-
+    dialog.destroy()
     if response is not None:
       host, port = response
 
@@ -516,7 +521,7 @@ class Interface(gtk.Window):
     dialog = dialogs.HostDialog(self, "Find Node...", host, port, hash)
 
     response = dialog.run()
-
+    dialog.destroy()
     if response is not None:
       host, port, hash = response
 
@@ -541,7 +546,7 @@ class Interface(gtk.Window):
     dialog = dialogs.HostDialog(self, "Get Peers...", host, port, hash)
 
     response = dialog.run()
-
+    dialog.destroy()
     if response is not None:
       host, port, hash = response
 

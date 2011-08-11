@@ -6,15 +6,16 @@ else:
   HAVE_UPNP = True
 
 import gobject
+import glib
 
 from contactinfo import ContactInfo
 import version
 
 class UPNPManager(gobject.GObject):
   __gsignals__ = {
-    "port-added": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+    "port-added": (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
       (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
-    "add-port-error": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+    "add-port-error": (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
       (str,))
   }
   lease_description = "UPNP port forwarded by "+version.full
@@ -24,7 +25,6 @@ class UPNPManager(gobject.GObject):
     self.igd = igd.Simple()
     self.igd.connect("mapped-external-port", self._do_mapped_external_port)
     self.igd.connect("error-mapping-port", self._do_error_mapping_port)
-    self.ports = []
   def add_udp_port(self, target):
     self.igd.add_port("UDP", target.port, target.host, target.port,
                       self.lease_duration, self.lease_description)
@@ -33,8 +33,7 @@ class UPNPManager(gobject.GObject):
                                local_port, description):
     external = ContactInfo(external_ip, external_port)
     internal = ContactInfo(local_ip, local_port)
-    self.ports.append((proto, external_port))
-    self.emit("port-added", external, internal)
+    glib.idle_add(self.emit, "port-added", external, internal)
   def _do_error_mapping_port(self, igd, error, proto, external_port, local_ip,
                              local_port, description):
     if isinstance(error, gobject.GPointer):
@@ -47,6 +46,7 @@ class UPNPManager(gobject.GObject):
         e = str(m[2])
         code = m2[1]
         if code == 725: #only permanent leases supported
+          # try a permanent motherfucking lease
           self.igd.add_port(proto, external_port, local_ip, local_port, 0,
                             description)
           return
@@ -56,8 +56,6 @@ class UPNPManager(gobject.GObject):
       e = error.message
     else:
       e = ""
-    self.emit("add-port-error", e)
+    glib.idle_add(self.emit, "add-port-error", e)
   def shutdown(self):
-    while self.ports:
-      port = self.ports.pop()
-      self.igd.remove_port(port[0], port[1])
+    self.igd.delete_all_mappings()

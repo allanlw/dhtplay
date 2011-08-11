@@ -51,7 +51,6 @@ class HostDialog(gtk.Dialog):
                   int(self.port_entry.get_text()))
     else:
       result = None
-    self.destroy()
     return result
 
 class ServerDialog(HostDialog):
@@ -114,5 +113,4 @@ class ServerDialog(HostDialog):
                 int(self.port_entry2.get_text()))
     else:
       result = None
-    self.destroy()
     return result
