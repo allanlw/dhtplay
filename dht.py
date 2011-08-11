@@ -144,9 +144,15 @@ class DHTRoutingTable(gobject.GObject):
         self.add_node(contact, hash)
       else:
         self._add_node(hash, contact, bucket_row["id"], True, now, True)
-  def get_node_row(self, hash):
-    return self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
-                                (hash.get_20(),))
+  def get_node_row(self, n):
+    if isinstance(n, ContactInfo):
+      return self.conn.select_one("SELECT * FROM nodes WHERE contact=? LIMIT 1",
+                                  (n.get_packed(),))
+    elif isinstance(n, Hash):
+      return self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
+                                  (n.get_20(),))
+    else:
+      raise TypeError("Unknown node identifier.")
   def get_bucket_row(self, id):
     return self.conn.select_one("SELECT * FROM buckets WHERE id=? LIMIT 1",
                                 (id,))

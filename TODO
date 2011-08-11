@@ -1,4 +1,5 @@
 TODO:
+* Write custom widget for status indicator.
 * support sending announce_peer packets
 * Add indicator if not receiving any incoming queries
 * Add boolean for having received a query for nodes
@@ -6,5 +7,5 @@ TODO:
 * Add responding to queries support
 * Add sending scrape support
 * swap find_peers and get_nodes in context menu for tree view right click
-* add exit to file menu
 * fixing sorting problem for sub-view with torrents
+* proper input validation / error handling everywhere

@@ -1,6 +1,7 @@
 import SocketServer
 import socket
 import glib
+import gobject
 import traceback
 
 from torrent import TorrentDB
@@ -22,22 +23,32 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
     if message.has_key("q") and message["q"] == "refresh":
       self.server._update()
       return
-    self.server._log("From "+str(self.client_address)+":"+str(message))
-    if message["y"] == "r":
-      self.server.routingtable.add_node(ContactInfo(*self.client_address),
+    c = ContactInfo(*self.client_address)
+    if not self.server.got_incoming:
+      if self.server.routingtable.get_node_row(c) == None:
+        self.server.got_incoming = True
+    self.server._log("From "+str(c)+":"+str(message))  
+    try:
+      self.server.routingtable.add_node(c,
                                         Hash(message["r"]["id"]))
+    except KeyError:
+      pass
     if self.server.callbacks.has_key(message["t"]):
       while self.server.callbacks[message["t"]]:
         self.server.callbacks[message["t"]].pop()(message)
 
-class DHTServer(SocketServer.UDPServer):
+class DHTServer(SocketServer.UDPServer, gobject.GObject):
+  got_incoming = gobject.property(type=bool, default=False)
+
   allow_reuse_address = True
-  def __init__(self, config, id = None, bind=("127.0.0.1", 6881), logfunc=None):
+  def __init__(self, config, id, bind, serv, logfunc=None):
     self.logfunc = logfunc
     self._log("Server Starting...")
 
-    SocketServer.UDPServer.__init__(self, bind, DHTRequestHandler)
+    gobject.GObject.__init__(self)
+    SocketServer.UDPServer.__init__(self, bind.get_tuple(), DHTRequestHandler)
     self.last_tid = 0
+    self.addr = serv
     self.callbacks = {}
     self.config = config
     self.conn = SQLiteThread(self.config.get("torrent", "db"))

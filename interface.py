@@ -1,7 +1,9 @@
 #!/usr/bin/python
 # This module contains the main interface for DHTPlay
+
 import gtk
 import glib
+import gobject
 import threading
 import time
 
@@ -10,10 +12,9 @@ import defaults
 import dialogs
 from contactinfo import ContactInfo
 from sha1hash import Hash
-
-name = "DHTPlay"
-
-version = "0.1"
+from statuslabel import StatusLabel
+from version import name, version
+import upnp
 
 settings = "settings.cfg"
 
@@ -26,6 +27,7 @@ class Interface(gtk.Window):
     self.cfg = opts
     self.server_thread = None
     self.server = None
+    self.upnp = None
 
     self.started_only = gtk.ActionGroup("started_only")
     self.stopped_only = gtk.ActionGroup("stopped_only")
@@ -272,6 +274,14 @@ class Interface(gtk.Window):
     self.statusbar = gtk.Statusbar()
     vbox.pack_end(self.statusbar, False, False)
 
+    self.serverstatus = StatusLabel("Server:", False)
+    self.statusbar.pack_start(self.serverstatus, False, False)
+
+    self.statusbar.pack_start(gtk.VSeparator(), False, False)
+
+    self.netstatus = StatusLabel("Network:")
+    self.statusbar.pack_start(self.netstatus, False, False)
+
     self.started_only.set_sensitive(False)
 
     self.torrentspeerslist = self.peerslist.filter_new()
@@ -356,6 +366,8 @@ class Interface(gtk.Window):
   def _cleanup(self, widget=None, event=None):
     if self.server:
       self.stop_server()
+    if self.upnp:
+      self.upnp.shutdown()
     gtk.main_quit()
 
   def startstop_server(self, widget=None):
@@ -369,27 +381,69 @@ class Interface(gtk.Window):
     port = self.cfg.get("last", "server_port")
     hash = self.cfg.get("last", "server_hash")
 
-    dialog = dialogs.HostDialog(self, "Start Server...", host, port, hash)
+    dialog = dialogs.ServerDialog(self, "Start Server...", self.cfg,
+                                  upnp.HAVE_UPNP)
 
     response = dialog.run()
 
+    dialog.destroy()
     if response is not None:
-      host, port, hash = response
+      bind_addr, bind_port, hash, use_upnp, host, port = response
 
       self.cfg.set("last", "server_host", host)
       self.cfg.set("last", "server_port", str(port))
       self.cfg.set("last", "server_hash", hash)
+      self.cfg.set("last", "server_bind_addr", bind_addr)
+      self.cfg.set("last", "server_bind_port", str(bind_port))
+      self.cfg.set("last", "server_upnp", str(use_upnp))
 
-      self.server_thread = threading.Thread(target=lambda:
-        self._bootstrap_server(hash, host, port))
-      self.server_thread.daemon = True
-      self.server_thread.start()
+      bind = ContactInfo(bind_addr, bind_port)
+      serv = ContactInfo(host, port)
 
-      self.started_only.set_sensitive(True)
-      self.stopped_only.set_sensitive(False)
+      if use_upnp:
+        self.upnp = upnp.UPNPManager()
+        self.upnp.connect("port-added", self._do_port_added, hash)
+        self.upnp.connect("add-port-error", self._do_add_port_error)
+        self.upnp.add_udp_port(bind)
+      else:
+        self._start_server(bind, serv)
+  def _do_add_port_error(self, manager, error):
+    mdialog = gtk.MessageDialog(self,
+                                gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
+                                gtk.MESSAGE_ERROR,
+                                gtk.BUTTONS_OK,
+                                "Error forwarding UPnP port: {0}".format(error))
+    mdialog.run()
+    mdialog.destroy()
+    self.upnp.shutdown()
+    self.upnp = None
+    self.start_server()
+  def _do_port_added(self, manager, external, internal, hash):
+    if self.server is not None:
+      return
+    mdialog = gtk.MessageDialog(self,
+                                gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
+                                gtk.MESSAGE_QUESTION,
+                                gtk.BUTTONS_OK_CANCEL,
+                                "UPnP forwarded succesfully. Start server on {0:s} bound to {1:s}?".format(external, internal))
+    response = mdialog.run()
+    print response
+    if response == gtk.RESPONSE_OK:
+      self._start_server(internal, external, hash)
+    print "LOL!"
+    mdialog.destroy()
+    print "!!!"
+  def _start_server(self, internal, external, hash):
+    self.server_thread = threading.Thread(target=lambda:
+      self._bootstrap_server(hash, internal, external))
+    self.server_thread.daemon = True
+    self.server_thread.start()
 
-  def _bootstrap_server(self, hash, host, port):
-    self.server = DHTServer(self.cfg, hash, (host, port), self._do_log)
+    self.started_only.set_sensitive(True)
+    self.stopped_only.set_sensitive(False)
+
+  def _bootstrap_server(self, hash, internal, external):
+    self.server = DHTServer(self.cfg, hash, internal, external, self._do_log)
     self.server.routingtable.connect("node-added", self._node_added)
     self.server.routingtable.connect("node-removed", self._node_removed)
     self.server.routingtable.connect("bucket-split", self._bucket_split)
@@ -398,10 +452,15 @@ class Interface(gtk.Window):
     self.server.torrents.connect("torrent-added", self._torrent_added)
     self.server.torrents.connect("peer-added", self._peer_added)
     self.server.torrents.connect("peer-changed", self._peer_changed)
+    glib.idle_add(self.netstatus.attach_to_prop, self.server, "got_incoming")
     glib.idle_add(self._refresh_nodes)
+    glib.idle_add(self.serverstatus.set_status, True)
+
     self.server.serve_forever()
 
   def stop_server(self, widget=None):
+    self.netstatus.detach_prop()
+
     self.server.shutdown()
     self.server = None
     self.server_thread = None
@@ -413,6 +472,11 @@ class Interface(gtk.Window):
     self.bucketslist.clear()
     self.torrentslist.clear()
     self.peerslist.clear()
+
+    self.serverstatus.set_status(False)
+
+    self.upnp.shutdown()
+    self.upnp = None
 
   def ping_node(self, widget=None, host=None, port=None):
     if not self.server:

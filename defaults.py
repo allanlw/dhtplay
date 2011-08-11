@@ -11,8 +11,11 @@ db = :memory:
 
 [last]
 server_host = 0.0.0.0
+server_bind_addr = 0.0.0.0
+server_bind_port = 6881
 server_port = 6881
 server_hash = 991b2fa313d425258ae99b7a9841940c0a0bc998
+server_upnp = False
 ping_host = 
 ping_port = 6881
 find_host = 
