@@ -1,11 +1,12 @@
 TODO:
-* Write custom widget for status indicator.
 * support sending announce_peer packets
 * Add indicator if not receiving any incoming queries
 * Add boolean for having received a query for nodes
-* Add torrent tab to interface
 * Add responding to queries support
 * Add sending scrape support
 * swap find_peers and get_nodes in context menu for tree view right click
 * fixing sorting problem for sub-view with torrents
 * proper input validation / error handling everywhere
+* re-impliment all context menus
+* move dht, upnp options into the configuration file.
+* split files into two modules net and gui
