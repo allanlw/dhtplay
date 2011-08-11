@@ -10,6 +10,7 @@ import time
 from server import DHTServer
 import defaults
 import dialogs
+import dbview
 from contactinfo import ContactInfo
 from sha1hash import Hash
 from statuslabel import StatusLabel
@@ -116,149 +117,30 @@ class Interface(gtk.Window):
     notebook = gtk.Notebook()
     vbox.pack_start(notebook, True, True)
 
-    nodeswin = gtk.ScrolledWindow()
-    nodeswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    notebook.append_page(nodeswin, gtk.Label("Nodes"))
+    self.bucketview = dbview.BucketView()
+    self.nodeview = dbview.NodeView(self.bucketview)
+    self.peerview = dbview.PeerView()
+    self.torrentview = dbview.TorrentView()
 
-    self.nodeslist = gtk.ListStore(int, str, int, str, str, float, bool)
-    nodestree = gtk.TreeView(self.nodeslist)
-    nodestree.connect("button_press_event", self._nodestree_button_press)
-    nodeswin.add(nodestree)
+    self.torrentpeerview = dbview.TorrentPeerView(self.torrentview,
+                                                  self.peerview)
+    self.peertorrentview = dbview.PeerTorrentView(self.peerview,
+                                                  self.torrentview)
 
-    bucketcolumn = gtk.TreeViewColumn("Bucket")
-    bucketrenderer = gtk.CellRendererText()
-    bucketcolumn.pack_start(bucketrenderer)
-    bucketcolumn.set_sort_column_id(0)
-    bucketcolumn.add_attribute(bucketrenderer, "text", 0)
-    nodestree.append_column(bucketcolumn)
-
-    pendingcolumn = gtk.TreeViewColumn("Pending")
-    pendingrenderer = gtk.CellRendererToggle()
-    pendingrenderer.set_radio(False)
-    pendingrenderer.set_active(False)
-    pendingcolumn.pack_start(pendingrenderer)
-    pendingcolumn.set_sort_column_id(6)
-    pendingcolumn.add_attribute(pendingrenderer, "active", 6)
-    nodestree.append_column(pendingcolumn)
-
-    hostcolumn = gtk.TreeViewColumn("Host")
-    hostrenderer = gtk.CellRendererText()
-    hostcolumn.pack_start(hostrenderer)
-    hostcolumn.set_sort_column_id(1)
-    hostcolumn.add_attribute(hostrenderer, "text", 1)
-    nodestree.append_column(hostcolumn)
-
-    portcolumn = gtk.TreeViewColumn("Port")
-    portrenderer = gtk.CellRendererText()
-    portcolumn.pack_start(portrenderer)
-    portcolumn.set_sort_column_id(2)
-    portcolumn.add_attribute(portrenderer, "text", 2)
-    nodestree.append_column(portcolumn)
-
-    hashcolumn = gtk.TreeViewColumn("Hash")
-    hashrenderer = gtk.CellRendererText()
-    hashrenderer.set_property("family", "monospace")
-    hashcolumn.pack_start(hashrenderer)
-    hashcolumn.set_sort_column_id(3)
-    hashcolumn.add_attribute(hashrenderer, "text", 3)
-    nodestree.append_column(hashcolumn)
-
-    timecolumn = gtk.TreeViewColumn("Last Good")
-    timerenderer = gtk.CellRendererText()
-    timecolumn.pack_start(timerenderer)
-    timecolumn.set_sort_column_id(5)
-    timecolumn.add_attribute(timerenderer, "text", 4)
-    nodestree.append_column(timecolumn)
-
-    bucketswin = gtk.ScrolledWindow()
-    bucketswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    notebook.append_page(bucketswin, gtk.Label("Buckets"))
-
-    self.bucketslist = gtk.ListStore(int, float, float, int, str, float)
-    bucketstree = gtk.TreeView(self.bucketslist)
-    bucketstree.connect("button_press_event", self._bucketstree_button_press)
-    bucketswin.add(bucketstree)
-
-    idcolumn = gtk.TreeViewColumn("ID")
-    idrenderer = gtk.CellRendererText()
-    idcolumn.pack_start(idrenderer)
-    idcolumn.set_sort_column_id(0)
-    idcolumn.add_attribute(idrenderer, "text", 0)
-    bucketstree.append_column(idcolumn)
-
-    mincolumn = gtk.TreeViewColumn("Min")
-    minrenderer = gtk.CellRendererText()
-    mincolumn.pack_start(minrenderer)
-    mincolumn.set_sort_column_id(1)
-    mincolumn.add_attribute(minrenderer, "text", 1)
-    bucketstree.append_column(mincolumn)
-
-    maxcolumn = gtk.TreeViewColumn("Max")
-    maxrenderer = gtk.CellRendererText()
-    maxcolumn.pack_start(maxrenderer)
-    maxcolumn.set_sort_column_id(2)
-    maxcolumn.add_attribute(maxrenderer, "text", 2)
-    bucketstree.append_column(maxcolumn)
-
-    numcolumn = gtk.TreeViewColumn("Num Nodes")
-    numrenderer = gtk.CellRendererText()
-    numcolumn.pack_start(numrenderer)
-    numcolumn.set_sort_column_id(3)
-    numcolumn.add_attribute(numrenderer, "text", 3)
-    bucketstree.append_column(numcolumn)
-
-    btimecolumn = gtk.TreeViewColumn("Last Changed")
-    btimerenderer = gtk.CellRendererText()
-    btimecolumn.pack_start(btimerenderer)
-    btimecolumn.set_sort_column_id(5)
-    btimecolumn.add_attribute(btimerenderer, "text", 4)
-    bucketstree.append_column(btimecolumn)
+    notebook.append_page(self.nodeview, gtk.Label("Nodes"))
+    notebook.append_page(self.bucketview, gtk.Label("Buckets"))
 
     torrentspane = gtk.VPaned()
     notebook.append_page(torrentspane, gtk.Label("Torrents"))
 
-    torrentswin = gtk.ScrolledWindow()
-    torrentswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    torrentspane.pack1(torrentswin, True, True)
-
-    self.torrentslist = gtk.ListStore(int, str, str, float)
-    torrentstree = self._make_torrents_view()
-    torrentstree.connect("button_press_event", self._torrentstree_button_press)
-    torrentstree.connect("cursor-changed", self._torrentstree_cursor_changed)
-    torrentstree.set_model(self.torrentslist)
-    torrentswin.add(torrentstree)
-
-    torrentspeerswin = gtk.ScrolledWindow()
-    torrentspeerswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    torrentspane.pack2(torrentspeerswin, True, True)
-
-    torrentspeerstree = self._make_peers_view()
-    torrentspeerstree.connect("button_press_event",
-                              self._peerstree_button_press)
-    torrentspeerswin.add(torrentspeerstree)
+    torrentspane.pack1(self.torrentview, True, True)
+    torrentspane.pack2(self.torrentpeerview, True, True)
 
     peerspane = gtk.VPaned()
     notebook.append_page(peerspane, gtk.Label("Peers"))
 
-    peerswin = gtk.ScrolledWindow()
-    peerswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    peerspane.pack1(peerswin, True, True)
-
-    self.peerslist = gtk.ListStore(int, str, int, str, float)
-    peerstree = self._make_peers_view()
-    peerstree.set_model(self.peerslist)
-    peerstree.connect("button_press_event", self._peerstree_button_press)
-    peerstree.connect("cursor-changed", self._peerstree_cursor_changed)
-    peerswin.add(peerstree)
-
-    peerstorrentswin = gtk.ScrolledWindow()
-    peerstorrentswin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    peerspane.pack2(peerstorrentswin, True, True)
-
-    peerstorrentstree = self._make_torrents_view()
-    peerstorrentstree.connect("button_press_event",
-                              self._torrentstree_button_press)
-    peerstorrentswin.add(peerstorrentstree)
+    peerspane.pack1(self.peerview, True, True)
+    peerspane.pack2(self.peertorrentview, True, True)
 
     logwin = gtk.ScrolledWindow()
     logwin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
@@ -284,81 +166,10 @@ class Interface(gtk.Window):
 
     self.started_only.set_sensitive(False)
 
-    self.torrentspeerslist = self.peerslist.filter_new()
-    vis = (lambda model, iter, data:
-             model.get_value(iter,0) in data)
-    self.torrentspeersdata = set()
-    self.torrentspeerslist.set_visible_func(vis, self.torrentspeersdata)
-    torrentspeerstree.set_model(self.torrentspeerslist)
-
-    self.peerstorrentslist = self.torrentslist.filter_new()
-    self.peerstorrentsdata = set()
-    self.peerstorrentslist.set_visible_func(vis, self.peerstorrentsdata)
-    peerstorrentstree.set_model(self.peerstorrentslist)
-
     self.show_all()
     self.hide()
 
     self._do_log("Application Initiated.")
-
-  def _make_peers_view(self):
-    peerstree = gtk.TreeView()
-
-    pidcolumn = gtk.TreeViewColumn("ID")
-    pidrenderer = gtk.CellRendererText()
-    pidcolumn.pack_start(pidrenderer)
-    pidcolumn.set_sort_column_id(0)
-    pidcolumn.add_attribute(pidrenderer, "text", 0)
-    peerstree.append_column(pidcolumn)
-
-    phostcolumn = gtk.TreeViewColumn("Host")
-    phostrenderer = gtk.CellRendererText()
-    phostcolumn.pack_start(phostrenderer)
-    phostcolumn.set_sort_column_id(1)
-    phostcolumn.add_attribute(phostrenderer, "text", 1)
-    peerstree.append_column(phostcolumn)
-
-    pportcolumn = gtk.TreeViewColumn("Port")
-    pportrenderer = gtk.CellRendererText()
-    pportcolumn.pack_start(pportrenderer)
-    pportcolumn.set_sort_column_id(2)
-    pportcolumn.add_attribute(pportrenderer, "text", 2)
-    peerstree.append_column(pportcolumn)
-
-    pupdatedcolumn = gtk.TreeViewColumn("Updated")
-    pupdatedrenderer = gtk.CellRendererText()
-    pupdatedcolumn.pack_start(pupdatedrenderer)
-    pupdatedcolumn.set_sort_column_id(4)
-    pupdatedcolumn.add_attribute(pupdatedrenderer, "text", 3)
-    peerstree.append_column(pupdatedcolumn)
-
-    return peerstree
-
-  def _make_torrents_view(self):
-    torrentstree = gtk.TreeView()
-
-    tidcolumn = gtk.TreeViewColumn("ID")
-    tidrenderer = gtk.CellRendererText()
-    tidcolumn.pack_start(tidrenderer)
-    tidcolumn.set_sort_column_id(0)
-    tidcolumn.add_attribute(tidrenderer, "text", 0)
-    torrentstree.append_column(tidcolumn)
-
-    thashcolumn = gtk.TreeViewColumn("Info Hash")
-    thashrenderer = gtk.CellRendererText()
-    thashcolumn.pack_start(thashrenderer)
-    thashcolumn.set_sort_column_id(1)
-    thashcolumn.add_attribute(thashrenderer, "text", 1)
-    torrentstree.append_column(thashcolumn)
-
-    tupdatedcolumn = gtk.TreeViewColumn("Updated")
-    tupdatedrenderer = gtk.CellRendererText()
-    tupdatedcolumn.pack_start(tupdatedrenderer)
-    tupdatedcolumn.set_sort_column_id(3)
-    tupdatedcolumn.add_attribute(tupdatedrenderer, "text", 2)
-    torrentstree.append_column(tupdatedcolumn)
-
-    return torrentstree
 
   def quit(self, widget=None, event=None):
     self._cleanup()
@@ -449,33 +260,28 @@ class Interface(gtk.Window):
 
   def _bootstrap_server(self, hash, internal, external):
     self.server = DHTServer(self.cfg, hash, internal, external, self._do_log)
-    self.server.routingtable.connect("node-added", self._node_added)
-    self.server.routingtable.connect("node-removed", self._node_removed)
-    self.server.routingtable.connect("bucket-split", self._bucket_split)
-    self.server.routingtable.connect("bucket-changed", self._bucket_changed)
-    self.server.routingtable.connect("node-changed", self._node_changed)
-    self.server.torrents.connect("torrent-added", self._torrent_added)
-    self.server.torrents.connect("peer-added", self._peer_added)
-    self.server.torrents.connect("peer-changed", self._peer_changed)
+    self.bucketview.bind_to(self.server.routingtable)
+    self.nodeview.bind_to(self.server.routingtable)
+    self.torrentview.bind_to(self.server.torrents)
+    self.peerview.bind_to(self.server.torrents)
     glib.idle_add(self.netstatus.attach_to_prop, self.server, "got_incoming")
-    glib.idle_add(self._refresh_nodes)
     glib.idle_add(self.serverstatus.set_status, True)
 
     self.server.serve_forever()
   def stop_server(self, widget=None):
-    self.netstatus.detach_prop()
-
     self.server.shutdown()
+
+    self.netstatus.detach_prop()
+    self.nodeview.unbind()
+    self.bucketview.unbind()
+    self.torrentview.unbind()
+    self.peerview.unbind()
+
     self.server = None
     self.server_thread = None
 
     self.started_only.set_sensitive(False)
     self.stopped_only.set_sensitive(True)
-
-    self.nodeslist.clear()
-    self.bucketslist.clear()
-    self.torrentslist.clear()
-    self.peerslist.clear()
 
     self.serverstatus.set_status(False)
 
@@ -589,138 +395,6 @@ class Interface(gtk.Window):
 
     return False
 
-  def _refresh_nodes(self):
-    self.nodeslist.clear()
-    self.bucketslist.clear()
-    if self.server:
-       for bucket in self.server.routingtable.get_bucket_rows():
-         self._add_bucket_row(bucket)
-       for node in self.server.routingtable.get_node_rows():
-         self._add_node_row(node)
-       for torrent in self.server.torrents.get_torrent_rows():
-         self._add_torrent_row(torrent)
-       for peer in self.server.torrents.get_peer_rows():
-         self._add_peer_row(peer)
-    return False
-
-  def _add_bucket_row(self, row):
-    self.bucketslist.append((row["id"],
-                             Hash(row["start"]).get_pow(),
-                             Hash(row["end"]).get_pow(),
-                             0,
-                             row["updated"].ctime(),
-                             time.mktime(row["updated"].timetuple())))
-
-  def _update_bucket_row(self, row):
-    iter = self.bucketslist.get_iter(0)
-    while (iter is not None and
-           self.bucketslist.get_value(iter, 0) != row["id"]):
-      iter = self.bucketslist.iter_next(iter)
-    if iter is not None:
-      self.bucketslist.set(iter, 0, row["id"],
-                           1, Hash(row["start"]).get_pow(),
-                           2, Hash(row["end"]).get_pow(),
-                           4, row["updated"].ctime(),
-                           5, time.mktime(row["updated"].timetuple()))
-
-  def _add_bucket_node(self, bucket, amt):
-    iter = self.bucketslist.get_iter(0)
-    while (iter is not None and
-           self.bucketslist.get_value(iter, 0) != bucket):
-      iter = self.bucketslist.iter_next(iter)
-    if iter is not None:
-      self.bucketslist.set(iter, 3, self.bucketslist.get(iter, 3)[0]+amt)
-
-  def _add_node_row(self, row):
-    try:
-      contact = ContactInfo(row["contact"])
-    except TypeError:
-      pass
-    self.nodeslist.append((row["bucket_id"],
-                           contact.host,
-                           contact.port,
-                           Hash(row["hash"]).get_hex(),
-                           row["updated"].ctime(),
-                           time.mktime(row["updated"].timetuple()),
-                           row["pending"]))
-    if not row["pending"]:
-      self._add_bucket_node(row["bucket_id"], +1)
-
-  def _update_node_row(self, row):
-    iter = self.nodeslist.get_iter(0)
-    while (iter is not None and
-           self.nodeslist.get_value(iter, 3) != Hash(row["hash"]).get_hex()):
-      iter = self.nodeslist.iter_next(iter)
-    if iter is not None:
-      contact = ContactInfo(row["contact"])
-      if not self.nodeslist.get(iter,6)[0]:
-        self._add_bucket_node(self.nodeslist.get_value(iter,0), -1)
-      self.nodeslist.set(iter, 0, int(row["bucket_id"]),
-                         1, contact.host, 2, contact.port,
-                         3, Hash(row["hash"]).get_hex(),
-                         4, row["updated"].ctime(),
-                         5, time.mktime(row["updated"].timetuple()),
-                         6, row["pending"])
-      if not row["pending"]:
-        self._add_bucket_node(row["bucket_id"], +1)
-
-  def _remove_node_row(self, hash):
-    iter = self.nodeslist.get_iter(0)
-    while (iter is not None and
-           self.nodeslist.get_value(iter,3) != hash.get_hex()):
-      iter = self.nodeslist.iter_next(iter)
-    if iter is not None:
-      self._add_bucket_node(self.nodeslist.get_value(iter, 0), -1)
-      self.nodeslist.remove(iter)
-
-  def _add_torrent_row(self, row):
-    self.torrentslist.append((row["id"], Hash(row["hash"]).get_hex(),
-                           row["updated"].ctime(),
-                           time.mktime(row["updated"].timetuple())))
-
-  def _add_peer_row(self, row):
-    c=ContactInfo(row["contact"])
-    self.peerslist.append((row["id"], c.host, c.port,
-                           row["updated"].ctime(),
-                           time.mktime(row["updated"].timetuple()))) 
-
-  def _update_peer_row(self, row):
-    iter = self.peerslist.get_iter(0)
-    while (iter is not None and
-           self.peerslist.get_value(iter, 0) != row["id"]):
-      iter = self.peerslist.iter_next(iter)
-    if iter is not None:
-      contact = ContactInfo(row["contact"])
-      self.peerslist.set(iter, 0, int(row["id"]),
-                         1, contact.host, 2, contact.port,
-                         3, row["updated"].ctime(),
-                         4, time.mktime(row["updated"].timetuple()))
-
-  def _node_added(self, router, hash):
-    self._add_node_row(router.get_node_row(hash))
-
-  def _peer_added(self, router, id):
-    self._add_peer_row(router.get_peer_row(id))
-
-  def _peer_changed(self, router, id):
-    self._update_peer_row(router.get_peer_row(id))
-
-  def _bucket_split(self, router, bucket1, bucket2):
-    self._add_bucket_row(router.get_bucket_row(bucket2))
-    self._update_bucket_row(router.get_bucket_row(bucket1))
-
-  def _node_removed(self, router, hash):
-    self._remove_node_row(hash)
-
-  def _bucket_changed(self, router, bucket):
-    self._update_bucket_row(router.get_bucket_row(bucket))
-
-  def _node_changed(self, router, hash):
-    self._update_node_row(router.get_node_row(hash))
-
-  def _torrent_added(self, db, hash):
-    self._add_torrent_row(db.get_torrent_row(hash))
-
   def _nodestree_button_press(self, treeview, event):
     if event.button == 3:
       x = int(event.x)
@@ -763,33 +437,6 @@ class Interface(gtk.Window):
         find.show()
 
         menu.popup(None, None, None, event.button, event.time)
-
-  def _bucketstree_button_press(self, treeview, event):
-    pass
-
-  def _torrentstree_button_press(self, treeview, event):
-    pass
-
-  def _peerstree_button_press(self, treeview, event):
-    pass
-
-  def _torrentstree_cursor_changed(self, treeview):
-    iter = self.torrentslist.get_iter(treeview.get_cursor()[0])
-    id = self.torrentslist.get_value(iter, 0)
-    self.torrentspeersdata.clear()
-    if self.server:
-      peers = self.server.torrents.get_torrent_peers(id)
-      self.torrentspeersdata.update(p[0] for p in peers)
-    self.torrentspeerslist.refilter()
-
-  def _peerstree_cursor_changed(self, treeview):
-    iter = self.peerslist.get_iter(treeview.get_cursor()[0])
-    id = self.peerslist.get_value(iter, 0)
-    self.peerstorrentsdata.clear()
-    if self.server:
-      torrents = self.server.torrents.get_peer_torrents(id)
-      self.peerstorrentsdata.update(t[0] for t in torrents)
-    self.peerstorrentslist.refilter()
 
   def error(self, message):
     dialog = gtk.MessageDialog(self,
