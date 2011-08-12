@@ -114,37 +114,50 @@ class Interface(gtk.Window):
 
     # Work area
 
-    notebook = gtk.Notebook()
-    vbox.pack_start(notebook, True, True)
+    self.notebook = gtk.Notebook()
+    vbox.pack_start(self.notebook, True, True)
 
     self.bucketview = dbview.BucketView()
+
     self.nodeview = dbview.NodeView(self.bucketview)
+    self.nodeview.connect("right-click", self._do_nodeview_right_click)
+
     self.peerview = dbview.PeerView()
+
     self.torrentview = dbview.TorrentView()
+
+    self.bucketnodeview = dbview.BucketNodeView(self.bucketview,
+                                                self.nodeview)
+    self.bucketnodeview.connect("right-click", self._do_nodeview_right_click)
 
     self.torrentpeerview = dbview.TorrentPeerView(self.torrentview,
                                                   self.peerview)
     self.peertorrentview = dbview.PeerTorrentView(self.peerview,
                                                   self.torrentview)
 
-    notebook.append_page(self.nodeview, gtk.Label("Nodes"))
-    notebook.append_page(self.bucketview, gtk.Label("Buckets"))
+    self.notebook.append_page(self.nodeview, gtk.Label("Nodes"))
+
+    bucketspane = gtk.VPaned()
+    self.notebook.append_page(bucketspane, gtk.Label("Buckets"))
+
+    bucketspane.pack1(self.bucketview, True, True)
+    bucketspane.pack2(self.bucketnodeview, True, True)
 
     torrentspane = gtk.VPaned()
-    notebook.append_page(torrentspane, gtk.Label("Torrents"))
+    self.notebook.append_page(torrentspane, gtk.Label("Torrents"))
 
     torrentspane.pack1(self.torrentview, True, True)
     torrentspane.pack2(self.torrentpeerview, True, True)
 
     peerspane = gtk.VPaned()
-    notebook.append_page(peerspane, gtk.Label("Peers"))
+    self.notebook.append_page(peerspane, gtk.Label("Peers"))
 
     peerspane.pack1(self.peerview, True, True)
     peerspane.pack2(self.peertorrentview, True, True)
 
     logwin = gtk.ScrolledWindow()
     logwin.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-    notebook.append_page(logwin, gtk.Label("Log"))
+    self.notebook.append_page(logwin, gtk.Label("Log"))
 
     self.logbuffer = gtk.TextBuffer()
     self.logview = gtk.TextView(self.logbuffer)
@@ -370,6 +383,7 @@ class Interface(gtk.Window):
     torrent_filter = gtk.FileFilter()
     torrent_filter.set_name("Torrent Metainfo File")
     torrent_filter.add_pattern("*.torrent")
+    dialog.add_filter(torrent_filter)
 
     response = dialog.run()
     if response == gtk.RESPONSE_OK:
@@ -395,48 +409,48 @@ class Interface(gtk.Window):
 
     return False
 
-  def _nodestree_button_press(self, treeview, event):
-    if event.button == 3:
-      x = int(event.x)
-      y = int(event.y)
-      pathinfo = treeview.get_path_at_pos(x, y)
-      if pathinfo is not None:
-        path, col, cellx, celly = pathinfo
-        treeview.grab_focus()
-        treeview.set_cursor(path, col, 0)
+  def _do_nodeview_right_click(self, treeview, event, row):
+    menu = gtk.Menu()
 
-        iter = self.nodeslist.get_iter(path)
+    ping_act = self.started_only.get_action("ping")
+    ping = ping_act.create_menu_item()
+    ping.connect("activate", lambda w: (
+      self.ping_node(host=row[1], port=row[2])))
+    menu.add(ping)
+    ping_act.block_activate_from(ping)
+    ping.show()
 
-        menu = gtk.Menu()
+    find_act = self.started_only.get_action("find")
+    find = find_act.create_menu_item()
+    find.connect("activate", lambda w: (
+      self.find_node(host=row[1], port=row[2])))
+    menu.add(find)
+    find_act.block_activate_from(find)
+    find.show()
 
-        ping_act = self.started_only.get_action("ping")
-        ping = ping_act.create_menu_item()
-        ping.connect("activate", lambda w: (
-          self.ping_node(host=self.nodeslist.get_value(iter, 1),
-                         port=self.nodeslist.get_value(iter, 2))))
-        menu.add(ping)
-        ping_act.block_activate_from(ping)
-        ping.show()
+    get_peers_act = self.started_only.get_action("get_peers")
+    get_peers = get_peers_act.create_menu_item()
+    get_peers.connect("activate", lambda w: (
+      self.get_peers(host=row[1], port=row[2])))
+    menu.add(get_peers)
+    get_peers_act.block_activate_from(get_peers)
+    get_peers.show()
 
-        get_peers_act = self.started_only.get_action("get_peers")
-        get_peers = get_peers_act.create_menu_item()
-        get_peers.connect("activate", lambda w: (
-          self.get_peers(host=self.nodeslist.get_value(iter, 1),
-                         port=self.nodeslist.get_value(iter, 2))))
-        menu.add(get_peers)
-        get_peers_act.block_activate_from(get_peers)
-        get_peers.show()
+    if treeview is self.bucketnodeview:
+      sep = gtk.SeparatorMenuItem()
+      menu.add(sep)
+      sep.show()
 
-        find_act = self.started_only.get_action("find")
-        find = find_act.create_menu_item()
-        find.connect("activate", lambda w: (
-          self.find_node(host=self.nodeslist.get_value(iter, 1),
-                         port=self.nodeslist.get_value(iter, 2))))
-        menu.add(find)
-        find_act.block_activate_from(find)
-        find.show()
+      goto_nodes = gtk.MenuItem("View in Nodes Tab")
+      goto_nodes.connect("activate", self.goto_nodes_tab, treeview)
+      menu.add(goto_nodes)
+      goto_nodes.show()
 
-        menu.popup(None, None, None, event.button, event.time)
+    menu.popup(None, None, None, event.button, event.time)
+
+  def goto_nodes_tab(self, w, treeview):
+    self.notebook.set_current_page(0)
+    treeview.goto_parent()
 
   def error(self, message):
     dialog = gtk.MessageDialog(self,

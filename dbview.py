@@ -48,10 +48,15 @@ class BaseDBView(gtk.ScrolledWindow):
       y = int(event.y)
       pathinfo = widget.get_path_at_pos(x, y)
       if pathinfo is not None:
-        self.emit("right-click", event, self._data[pathinfo])
+        path, col, cellx, celly = pathinfo
+        self.set_cursor(path, col)
+        self.grab_focus()
+        self.emit("right-click", event, self._data[path])
   def __do_cursor_changed(self, widget):
     pathinfo = widget.get_cursor()[0]
     self.emit("cursor-changed", self._data[pathinfo])
+  def set_cursor(self, path, focus_column=None):
+    self._view.set_cursor(path, focus_column)
   def _find_row(self, col, value):
     iter = self._data.get_iter(0)
     while (iter is not None and
@@ -102,7 +107,10 @@ class FilterDBView(BaseDBView):
     self._data.set_visible_func(func)
   def refresh(self):
     self._data.refilter()
-
+  def goto_parent(self):
+    path = self._view.get_cursor()[0]
+    newpath = self._data.convert_path_to_child_path(path)
+    self._parent.set_cursor(newpath)
 class SetFilterDBView(FilterDBView):
   """Filter by forcing a checking a column against a set."""
   def __init__(self, view, col):
@@ -154,7 +162,7 @@ class BucketView(DBView):
       self._data.set(iter, 0, row["id"],
                      1, Hash(row["start"]).get_pow(),
                      2, Hash(row["end"]).get_pow(),
-                     4, row["update"].ctime(),
+                     4, row["updated"].ctime(),
                      5, time.mktime(row["updated"].timetuple()))
   def _mod_bucket_row(self, id, amt):
     iter = self._find_row(0, id)
@@ -167,8 +175,8 @@ class NodeView(DBView):
     ("Bucket", 0, 0),
     ("Pending", 6, 6),
     ("Host", 1, 1),
-    ("Hash", 2, 2),
-    ("Port", 3, 3),
+    ("Port", 2, 2),
+    ("Hash", 3, 3),
     ("Last Good", 4, 5),
   )
   def __init__(self, bucketview, routingtable=None):
@@ -211,7 +219,7 @@ class NodeView(DBView):
       if not row["pending"]:
         self.bucketview._mod_bucket_row(row["bucket_id"], +1)
   def _remove_node_row(self, hash):
-    iter = self._find_row(3, Hash(row["hash"]).get_hex())
+    iter = self._find_row(3, Hash(hash).get_hex())
     if iter is not None:
       self.bucketview._mod_bucket_row(self._data.get_value(iter, 0), -1)
       self._data.remove(iter)
@@ -231,7 +239,8 @@ class TorrentView(DBView):
   )
   def __init__(self, db = None):
     signals = {
-      "torrent-added": self._do_torrent_added
+      "torrent-added": self._do_torrent_added,
+      "torrent-changed": self._do_torrent_changed
     }
     DBView.__init__(self, self.schema, self.cols, signals)
     if db is not None:
@@ -243,8 +252,16 @@ class TorrentView(DBView):
     self._data.append((row["id"], Hash(row["hash"]).get_hex(),
                        row["updated"].ctime(),
                        time.mktime(row["updated"].timetuple())))
+  def _update_torrent_row(self, row):
+    iter = self._find_row(0, row["id"])
+    if iter is not None:
+      self._data.update(iter, 0, row["id"], 1, Hash(row["hash"]).get_hex(),
+                        2, row["updated"].ctime(),
+                        3, time.mktime(row["updated"].timetuple()))
   def _do_torrent_added(self, db, hash):
     self._add_torrent_row(db.get_torrent_row(hash))
+  def _do_torrent_changed(self, db, hash):
+    self._update_torrent_row(db.get_torrent_row(hash))
 
 class PeerView(DBView):
   schema = (int, str, int, str, float)
@@ -307,4 +324,15 @@ class PeerTorrentView(SetFilterDBView):
     if self.peerview._db is not None:
       torrents = self.peerview._db.get_peer_torrents(p_id)
       self._add_allowed(t[0] for t in torrents)
+    self.refresh()
+
+class BucketNodeView(SetFilterDBView):
+  def __init__(self, bucketview, nodeview):
+    SetFilterDBView.__init__(self, nodeview, 0)
+    self.bucketview = bucketview
+    self.bucketview.connect("cursor-changed", self._do_cursor_changed)
+  def _do_cursor_changed(self, view, row):
+    b_id = row[0]
+    self._clear_allowed()
+    self._add_allowed([b_id])
     self.refresh()

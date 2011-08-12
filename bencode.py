@@ -115,7 +115,7 @@ def bdecode_int(s, factory=None):
     factory = int_factory
   if len(s) <= 2 or  s[0] != 'i':
     raise BencodeError("Invalid bencoded int: string does not start with i.")
-  parts = str.partition("e")
+  parts = s.partition("e")
   if not parts[2]:
     raise BencodeError("Invalid bencoded int: string does not terminate.")
   return factory(parts[0][1:]), parts[2]
