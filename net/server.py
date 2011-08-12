@@ -4,12 +4,12 @@ import glib
 import gobject
 import traceback
 
-from torrent import TorrentDB
-from dht import DHTRoutingTable
-from sql import SQLiteThread
-from sha1hash import Hash
-from contactinfo import ContactInfo
-from bencode import *
+from net.torrent import TorrentDB
+from net.dht import DHTRoutingTable
+from net.sql import SQLiteThread
+from net.sha1hash import Hash
+from net.contactinfo import ContactInfo
+from net.bencode import *
 
 REFRESH_CHECK = 30 # s
 
@@ -53,7 +53,7 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     self.config = config
     self.conn = SQLiteThread(self.config.get("torrent", "db"))
     self.conn.start()
-    self.conn.executescript(open("db.sql","r").read())
+    self.conn.executescript(open("sql/db.sql","r").read())
     self.torrents = TorrentDB(self, self.conn)
     self.id = Hash(id)
     self.timeout_id = glib.timeout_add_seconds(REFRESH_CHECK,

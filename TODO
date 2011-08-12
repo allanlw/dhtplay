@@ -8,4 +8,3 @@ TODO:
 * fixing sorting problem for sub-view with torrents
 * proper input validation / error handling everywhere
 * move dht, upnp options into the configuration file.
-* split files into two modules net and gui

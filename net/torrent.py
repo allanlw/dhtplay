@@ -3,8 +3,8 @@ import gobject
 import glib
 from datetime import datetime
 
-from sha1hash import Hash
-from contactinfo import ContactInfo
+from net.sha1hash import Hash
+from net.contactinfo import ContactInfo
 
 class TorrentDB(gobject.GObject):
   __gsignals__ = {

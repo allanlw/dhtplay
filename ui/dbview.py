@@ -2,8 +2,8 @@ import gtk
 import gobject
 import time
 
-from sha1hash import Hash
-from contactinfo import ContactInfo
+from net.sha1hash import Hash
+from net.contactinfo import ContactInfo
 
 class BaseDBView(gtk.ScrolledWindow):
   """Base class for convenient database views."""

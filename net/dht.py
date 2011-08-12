@@ -7,11 +7,11 @@ import math
 import random
 from datetime import datetime
 
-from bencode import *
-from sha1hash import Hash
-from contactinfo import ContactInfo
-from torrent import TorrentDB
-from sql import SQLiteThread
+from net.bencode import *
+from net.sha1hash import Hash
+from net.contactinfo import ContactInfo
+from net.torrent import TorrentDB
+from net.sql import SQLiteThread
 
 MAX_BUCKET_SIZE = 8
 MAX_PENDING_PINGS = 2

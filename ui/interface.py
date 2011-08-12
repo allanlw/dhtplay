@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # This module contains the main interface for DHTPlay
 
 import gtk
@@ -7,17 +6,14 @@ import gobject
 import threading
 import time
 
-from server import DHTServer
-import defaults
-import dialogs
-import dbview
-from contactinfo import ContactInfo
-from sha1hash import Hash
-from statuslabel import StatusLabel
+from net.server import DHTServer
+from ui import dialogs
+from ui import dbview
+from net.contactinfo import ContactInfo
+from net.sha1hash import Hash
+from ui.statuslabel import StatusLabel
 from version import name, version
-import upnp
-
-settings = "settings.cfg"
+from net import upnp
 
 class Interface(gtk.Window):
   def __init__(self, opts):
@@ -230,11 +226,13 @@ class Interface(gtk.Window):
           self._do_port_added(w,x,y,hash))
         self.upnp.connect("add-port-error", self._do_add_port_error)
         self.upnp.add_udp_port(bind)
+        self.set_sensitive(False)
       else:
         self._start_server(bind, serv, hash)
   def _do_add_port_error(self, manager, error):
     # see comment in _do_port_added
     with gtk.gdk.lock:
+      self.set_sensitive(True)
       mdialog = gtk.MessageDialog(self,
                                   gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
                                   gtk.MESSAGE_ERROR,
@@ -251,6 +249,7 @@ class Interface(gtk.Window):
     # but it will hang if I do not.
     # Hypothesis: gupnp.igd.Simple is not using the same GMainContext as I am?
     with gtk.gdk.lock:
+      self.set_sensitive(True)
       if self.server is not None:
         return
       mdialog = gtk.MessageDialog(self,
@@ -460,16 +459,3 @@ class Interface(gtk.Window):
                                message)
     dialog.run()
     dialog.destroy()
-
-if __name__ == "__main__":
-  gtk.gdk.threads_init()
-  config = defaults.default_config
-  config.read(settings)
-  app = Interface(config)
-  app.show()
-  gtk.main()
-  try:
-    app.destroy()
-  except:
-    pass
-  config.write(open(settings, 'w'))
