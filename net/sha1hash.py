@@ -1,4 +1,5 @@
 import math
+import sqlite3
 
 class Hash:
   def __init__(self, id):
@@ -45,3 +46,6 @@ class Hash:
       return math.log(self.get_int(), 2)
     except ValueError:
       return 0
+  def __conform__(self, protocol):
+    if protocol is sqlite3.PrepareProtocol:
+      return self.get_20()

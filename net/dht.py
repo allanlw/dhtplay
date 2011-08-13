@@ -45,8 +45,8 @@ class DHTRoutingTable(gobject.GObject):
     self.server = server
     r = self.conn.select_one("SELECT COUNT(*) FROM buckets")
     if r[0] == 0:
-      lower = Hash(0).get_20()
-      upper = Hash((1 << 160) - 1).get_20()
+      lower = Hash(0)
+      upper = Hash((1 << 160) - 1)
       now = datetime.now()
       self.conn.execute("INSERT INTO buckets VALUES(NULL, ?, ?, ?, ?)",
                         (lower, upper, now, now))
@@ -54,7 +54,7 @@ class DHTRoutingTable(gobject.GObject):
 
   def _add_node(self, hash, contact, bucket, good, time, pending=False):
     id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?,?,?,?,?,?,?)",
-                          (hash.get_20(), contact.get_packed(),
+                          (hash, contact,
                            bucket, good, pending, time, time))
     glib.idle_add(self.emit, "node-added", hash)
     if not pending:
@@ -65,7 +65,7 @@ class DHTRoutingTable(gobject.GObject):
 
   def _delete_node(self, id, hash):
     self.conn.execute("DELETE FROM nodes WHERE id=?", (id,))
-    glib.idle_add(self.emit, "node-removed", Hash(hash))
+    glib.idle_add(self.emit, "node-removed", hash)
 
   def _cull_bucket(self, now, bucket):
     rows = self.conn.select("""SELECT * FROM nodes
@@ -78,7 +78,7 @@ class DHTRoutingTable(gobject.GObject):
     for row in rows:
       if row["good"]:
         if (now - row["updated"]).seconds >= IDLE_TIMEOUT:
-          self.server.send_ping(ContactInfo(row["contact"]).get_tuple())
+          self.server.send_ping(row["contact"].get_tuple())
       else:
         self._delete_node(row["id"], row["hash"])
         culled = True
@@ -88,9 +88,9 @@ class DHTRoutingTable(gobject.GObject):
   def _split_bucket(self, now, bucket_row, bstart, bend):
     bmid = bstart + (bend - bstart)/2
     self.conn.execute("UPDATE buckets SET end=?, updated=? WHERE id=?",
-                      (Hash(bmid).get_20(), now, bucket_row["id"]))
+                      (Hash(bmid), now, bucket_row["id"]))
     newb = self.conn.insert("INSERT INTO buckets VALUES (NULL, ?, ?, ?, ?)",
-                            (Hash(bmid).get_20(), bucket_row["end"], now, now))
+                            (Hash(bmid), bucket_row["end"], now, now))
     oldb = bucket_row["id"]
     glib.idle_add(self.emit, "bucket-split", oldb, newb)
 
@@ -98,7 +98,7 @@ class DHTRoutingTable(gobject.GObject):
                                WHERE bucket_id=?""",
                             (oldb,))
     for row in rows:
-      h = Hash(row[1])
+      h = row[1]
       if h.get_int() >= bmid:
         self.conn.execute("UPDATE nodes SET bucket_id=? WHERE id=?",
                           (newb,row["id"]))
@@ -108,7 +108,7 @@ class DHTRoutingTable(gobject.GObject):
     now = datetime.now()
 
     node_row = self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
-                                    (hash.get_20(),))
+                                    (hash,))
     if node_row is not None:
       self.conn.execute("UPDATE nodes SET updated=? WHERE id=?",
                         (now, node_row["id"]))
@@ -118,7 +118,7 @@ class DHTRoutingTable(gobject.GObject):
     bucket_row = self.conn.select_one("""SELECT * FROM buckets
                                          WHERE start<=? AND end>?
                                          LIMIT 1""",
-                                      (hash.get_20(),hash.get_20()))
+                                      (hash,hash))
     if bucket_row is None:
       raise ValueError("No bucket found???")
 
@@ -126,8 +126,8 @@ class DHTRoutingTable(gobject.GObject):
                                     WHERE bucket_id=?""",
                                  (bucket_row["id"],))[0]
 
-    bstart = Hash(bucket_row["start"]).get_int()
-    bend = Hash(bucket_row["end"]).get_int()
+    bstart = bucket_row["start"].get_int()
+    bend = bucket_row["end"].get_int()
 
     if count < MAX_BUCKET_SIZE:
       # add normally
@@ -147,10 +147,10 @@ class DHTRoutingTable(gobject.GObject):
   def get_node_row(self, n):
     if isinstance(n, ContactInfo):
       return self.conn.select_one("SELECT * FROM nodes WHERE contact=? LIMIT 1",
-                                  (n.get_packed(),))
+                                  (n,))
     elif isinstance(n, Hash):
       return self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
-                                  (n.get_20(),))
+                                  (n,))
     else:
       raise TypeError("Unknown node identifier.")
   def get_bucket_row(self, id):
@@ -185,11 +185,11 @@ class DHTRoutingTable(gobject.GObject):
           self.conn.execute("""UPDATE nodes SET bucket_id=?, pending=?,
                                updated=? WHERE id=?""",
                             (row["bucket_id"], False, now, row["id"]))
-          glib.idle_add(self.emit, "node-changed", Hash(row["nodes.hash"]))
+          glib.idle_add(self.emit, "node-changed", row["hash"])
           self.conn.execute("UPDATE buckets SET updated=? WHERE id=?",
                             (now, row["bucket_id"]))
           glib.idle_add(self.emit, "bucket-changed",
-                        row["pending_nodes.bucket_id"])
+                        row["bucket_id"])
 
     rows = self.conn.select("SELECT * FROM buckets")
     for r in rows:
@@ -201,7 +201,7 @@ class DHTRoutingTable(gobject.GObject):
                                 AND NOT pending ORDER BY random() LIMIT 1""",
                              (bucket,))
     if r is not None:
-      self.server.send_ping(ContactInfo(r["contact"]).get_tuple())
+      self.server.send_ping(r["contact"].get_tuple())
   def _handle_ping_response(self, hash, message):
     pass
   def _handle_find_response(self, hash, message):

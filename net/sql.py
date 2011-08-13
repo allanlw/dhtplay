@@ -2,6 +2,8 @@ import sqlite3
 import threading
 import Queue
 
+import net
+
 class SQLiteThread(threading.Thread):
   """This is a class for sharing a SQLite connection between threads by using
   a queue system."""
@@ -17,6 +19,13 @@ class SQLiteThread(threading.Thread):
     self.db = db
     self._stopped = False
   def run(self):
+    sqlite3.register_converter("contactinfo",
+                               lambda x: net.contactinfo.ContactInfo(x))
+    sqlite3.register_converter("sha1hash",
+                               lambda x: net.sha1hash.Hash(x))
+    sqlite3.register_converter("bloom",
+                               lambda x: net.bloom.BloomFilter(x))
+
     conn = sqlite3.connect(self.db,
                         detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES,
                         check_same_thread=True)
@@ -40,7 +49,7 @@ class SQLiteThread(threading.Thread):
         else:
           cursor.execute(stmt[1])
       except (sqlite3.OperationalError, sqlite3.ProgrammingError,
-              ValueError) as e:
+              ValueError, sqlite3.InterfaceError) as e:
         raise ValueError("Invalid SQL Statement - {0} ({1})".format(stmt, e))
       if stmt[0] >= 0:
         self.results.put((stmt[0], cursor.fetchall(), cursor.lastrowid))

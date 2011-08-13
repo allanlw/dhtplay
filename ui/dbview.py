@@ -98,7 +98,8 @@ class DBView(BaseDBView):
 class FilterDBView(BaseDBView):
   """Class for DB Views that filter other DBViews."""
   def __init__(self, parent, func):
-    BaseDBView.__init__(self, parent._schema, parent._cols)
+    cols = [(x[0], x[1], -1) for x in parent._cols]
+    BaseDBView.__init__(self, parent._schema, cols)
     self._parent = parent
     self._data = self._parent._data.filter_new()
     self._view.set_model(self._data)
@@ -151,8 +152,8 @@ class BucketView(DBView):
     self._update_bucket_row(router.get_bucket_row(bucket))
   def _add_bucket_row(self, row):
     self._data.append((row["id"],
-                       Hash(row["start"]).get_pow(),
-                       Hash(row["end"]).get_pow(),
+                       row["start"].get_pow(),
+                       row["end"].get_pow(),
                        0,
                        row["updated"].ctime(),
                        time.mktime(row["updated"].timetuple())))
@@ -160,8 +161,8 @@ class BucketView(DBView):
     iter = self._find_row(0, row["id"])
     if iter is not None:
       self._data.set(iter, 0, row["id"],
-                     1, Hash(row["start"]).get_pow(),
-                     2, Hash(row["end"]).get_pow(),
+                     1, row["start"].get_pow(),
+                     2, row["end"].get_pow(),
                      4, row["updated"].ctime(),
                      5, time.mktime(row["updated"].timetuple()))
   def _mod_bucket_row(self, id, amt):
@@ -195,10 +196,9 @@ class NodeView(DBView):
     for node in self._db.get_node_rows():
       self._add_node_row(node)
   def _add_node_row(self, row):
-    contact = ContactInfo(row["contact"])
     self._data.append((row["bucket_id"],
-                       contact.host, contact.port,
-                       Hash(row["hash"]).get_hex(),
+                       row["contact"].host, row["contact"].port,
+                       row["hash"].get_hex(),
                        row["updated"].ctime(),
                        time.mktime(row["updated"].timetuple()),
                        row["pending"]))
@@ -207,12 +207,11 @@ class NodeView(DBView):
   def _update_node_row(self, row):
     iter = self._find_row(3, Hash(row["hash"]).get_hex())
     if iter is not None:
-      contact = ContactInfo(row["contact"])
       if not self._data.get_value(iter, 6):
         self.bucketview._mod_bucket_row(self._data.get_value(iter, 0), -1)
       self._data.set(iter, 0, row["bucket_id"],
-                     1, contact.host, 2, contact.port,
-                     3, Hash(row["hash"]).get_hex(),
+                     1, row["contact"].host, 2, row["contact"].port,
+                     3, row["hash"].get_hex(),
                      4, row["updated"].ctime(),
                      5, time.mktime(row["updated"].timetuple()),
                      6, row["pending"])
@@ -249,13 +248,13 @@ class TorrentView(DBView):
     for torrent in self._db.get_torrent_rows():
       self._add_torrent_row(torrent)
   def _add_torrent_row(self, row):
-    self._data.append((row["id"], Hash(row["hash"]).get_hex(),
+    self._data.append((row["id"], row["hash"].get_hex(),
                        row["updated"].ctime(),
                        time.mktime(row["updated"].timetuple())))
   def _update_torrent_row(self, row):
     iter = self._find_row(0, row["id"])
     if iter is not None:
-      self._data.update(iter, 0, row["id"], 1, Hash(row["hash"]).get_hex(),
+      self._data.set(iter, 0, row["id"], 1, row["hash"].get_hex(),
                         2, row["updated"].ctime(),
                         3, time.mktime(row["updated"].timetuple()))
   def _do_torrent_added(self, db, hash):
@@ -283,16 +282,14 @@ class PeerView(DBView):
     for peer in self._db.get_peer_rows():
       self._add_peer_row(peer)
   def _add_peer_row(self, row):
-    contact = ContactInfo(row["contact"])
-    self._data.append((row["id"], contact.host, contact.port,
+    self._data.append((row["id"], row["contact"].host, row["contact"].port,
                        row["updated"].ctime(),
                        time.mktime(row["updated"].timetuple())))
   def _update_peer_row(self, row):
     iter = self._find_row(0, row["id"])
     if iter is not None:
-      contact = ContactInfo(row["contact"])
       self._data.set(iter, 0, row["id"],
-                     1, contact.host, 2, contact.port,
+                     1, row["contact"].host, 2, row["contact"].port,
                      3, row["updated"].ctime(),
                      4, time.mktime(row["updated"].timetuple()))
   def _do_peer_added(self, db, peer):
