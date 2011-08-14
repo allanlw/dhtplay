@@ -210,3 +210,9 @@ class DHTRoutingTable(gobject.GObject):
     pass
   def close(self):
     pass
+  def get_closest(self, hash):
+    r = self.conn.select("""SELECT * FROM nodes
+                            ORDER BY xor(hash, ?) ASC
+                            LIMIT ?""",
+                         (hash.get_20(), MAX_BUCKET_SIZE))
+    return r

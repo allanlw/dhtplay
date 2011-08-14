@@ -29,6 +29,7 @@ class SQLiteThread(threading.Thread):
     conn = sqlite3.connect(self.db,
                         detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES,
                         check_same_thread=True)
+    conn.create_function("xor", 2, self._xor)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     while 1:
@@ -89,3 +90,8 @@ class SQLiteThread(threading.Thread):
   def close(self):
     self._stopped = True
     self.join()
+  def _xor(self, op1, op2):
+    result = ""
+    for i in range(min(len(op1), len(op2))):
+      result += chr(ord(op1[i]) ^ ord(op2[i]))
+    return buffer(result)

@@ -109,16 +109,24 @@ class TorrentDB(gobject.GObject):
   def get_peer_row(self, contact):
     return self.conn.select_one("SELECT * FROM peers WHERE contact=? LIMIT 1",
                                 (contact,))
+  def get_peer_by_id(self, id):
+    return self.conn.select_one("SELECT * FROM peers WHERE id=? LIMIT 1",
+                                (id,))
   def get_torrent_rows(self):
     return self.conn.select("SELECT * FROM torrents")
   def get_peer_rows(self):
     return self.conn.select("SELECT * FROM peers")
-  def get_torrent_peers(self, id):
-    return self.conn.select("""SELECT peer_torrents.peer_id FROM peer_torrents
-                               WHERE peer_torrents.torrent_id=?""", (id,))
+  def get_torrent_peers(self, id, noseed = False):
+    if noseed:
+      return self.conn.select("""SELECT peer_id FROM peer_torrents
+                                 WHERE torrent_id=? AND
+                                 NOT seed""", (id,))
+    else:
+      return self.conn.select("""SELECT peer_id FROM peer_torrents
+                                 WHERE torrent_id=?""", (id,))
   def get_peer_torrents(self, id):
-    return self.conn.select("""SELECT peer_torrents.torrent_id FROM peer_torrents
-                               WHERE peer_torrents.peer_id=?""", (id,))
+    return self.conn.select("""SELECT torrent_id FROM peer_torrents
+                               WHERE peer_id=?""", (id,))
   def add_filter(self, filter, hash, seed):
     now = datetime.now()
     if seed:
@@ -126,6 +134,8 @@ class TorrentDB(gobject.GObject):
     else:
       key = "peers"
     row = self.get_torrent_row(hash)
+    if row is None:
+      return
     new = row[key] | filter
 
     self.conn.execute("UPDATE torrents SET updated=?, {0}=? WHERE id=?".format(key),

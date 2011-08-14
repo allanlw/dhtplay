@@ -276,7 +276,7 @@ class Interface(gtk.Window):
     self.nodeview.bind_to(self.server.routingtable)
     self.torrentview.bind_to(self.server.torrents)
     self.peerview.bind_to(self.server.torrents)
-    glib.idle_add(self.netstatus.attach_to_prop, self.server, "got_incoming")
+    glib.idle_add(self.netstatus.attach_to_prop, self.server, "incoming")
     glib.idle_add(self.serverstatus.set_status, True)
 
     self.server.serve_forever()

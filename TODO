@@ -1,6 +1,6 @@
 TODO:
 * support sending announce_peer packets
-* Add responding to queries support
-* proper input validation / error handling everywhere
+* test announce_peer response
+* proper input validation / error handling everywhere (including malformed packets, etc.)
 * move dht, upnp options into the configuration file
-* Add indicator if not receiving any incoming queries (works?)
+* UPnP timeout investigation? Doesn't work on second try? freezes????

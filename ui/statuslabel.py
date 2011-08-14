@@ -46,7 +46,7 @@ class StatusLabel(gtk.Frame):
 
   def attach_to_prop(self, obj, prop):
     self.detach_prop()
-    h = obj.connect("notify::{0:s}".format(prop), self._do_notified)
+    h = obj.connect("notify::{0}".format(prop), self._do_notified)
     self._prop_handle = (obj, h)
     self.set_status(obj.get_property(prop))
 

@@ -3,6 +3,8 @@ import socket
 import glib
 import gobject
 import traceback
+import hashlib
+import random
 
 from net.torrent import TorrentDB
 from net.dht import DHTRoutingTable
@@ -10,35 +12,46 @@ from net.sql import SQLiteThread
 from net.sha1hash import Hash
 from net.contactinfo import ContactInfo
 from net.bencode import *
+from net.bloom import BloomFilter
 
 REFRESH_CHECK = 30 # s
+NUM_SECRETS = 20 # s
 
 class DHTRequestHandler(SocketServer.DatagramRequestHandler):
   def handle(self):
     enc_message = self.rfile.read()
     if not enc_message:
-      self.server._log("From "+str(self.client_address)+":None")
       return
     message = bdecode(enc_message)[0]
     if message.has_key("q") and message["q"] == "refresh":
       self.server._update()
       return
     c = ContactInfo(*self.client_address)
-    if not self.server.got_incoming:
+    if not self.server.incoming:
       if self.server.routingtable.get_node_row(c) == None:
-        self.server.got_incoming = True
+        self.server.incoming = True
     self.server._log("From "+str(c)+":"+str(message))  
+
     try:
       self.server.routingtable.add_node(c,
                                         Hash(message["r"]["id"]))
     except KeyError:
       pass
+
+    try:
+      self.server.routingtable.add_node(c,
+                                        Hash(message["a"]["id"]))
+    except KeyError:
+      pass
+
+    if message["y"] == "q":
+      self.server.handle_query(c, message)
     if self.server.callbacks.has_key(message["t"]):
       while self.server.callbacks[message["t"]]:
         self.server.callbacks[message["t"]].pop()(message)
 
 class DHTServer(SocketServer.UDPServer, gobject.GObject):
-  got_incoming = gobject.property(type=bool, default=False)
+  incoming = gobject.property(type=bool, default=False)
 
   allow_reuse_address = True
   def __init__(self, config, id, bind, serv, logfunc=None):
@@ -51,6 +64,7 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     self.addr = serv
     self.callbacks = {}
     self.config = config
+    self.secrets = [hashlib.sha1(str(random.random())).digest()]
     self.conn = SQLiteThread(self.config.get("torrent", "db"))
     self.conn.start()
     self.conn.executescript(open("sql/db.sql","r").read())
@@ -116,6 +130,51 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
       self.logfunc("Error with connection from "+str(client_address))
     traceback.print_exc() # XXX But this goes to stderr!
 
+  def handle_query(self, contact, message):
+    response = {"id": self.id.get_20()}
+    if message["q"] == "ping":
+      pass
+    elif message["q"] == "find_node":
+      nodes = ""
+      for row in self.routingtable.get_closest(Hash(message["a"]["target"])):
+        nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
+      response["nodes"] = nodes
+    elif message["q"] == "get_peers":
+      nodes = ""
+      for row in self.routingtable.get_closest(Hash(message["a"]["info_hash"])):
+        nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
+      response["nodes"] = nodes
+
+      trow = self.torrents.get_torrent_row(Hash(message["a"]["info_hash"]))
+      if trow is not None:
+        values = []
+        noseeds = False
+        if message["a"].has_key("noseed") and message["a"]["noseed"]:
+          noseeds = True
+        ids = self.torrents.get_torrent_peers(trow["id"],
+                                              noseeds)
+        for id in ids:
+          row = self.torrents.get_peer_by_id(id[0])
+          values.append(row["contact"].get_packed())
+        if values:
+          response["values"] = values
+
+        if message["a"].has_key("scrape") and message["a"]["scrape"]:
+          response["BFsd"] = trow["seeds"].get_bin()
+          response["BFpe"] = trow["peers"].get_bin()
+
+
+      response["token"] = self.get_token(contact)
+    elif message["q"] == "announce_peer": 
+      if self.check_token(message["a"]["token"]):
+        seed = False
+        if message["a"].has_key("seed") and message["a"]["seed"]:
+          seed = True
+        self.torrents.add_torrent(ContactInfo(contact.host,
+                                              message["a"]["port"]),
+                                  Hash(message["a"]["info_hash"]),
+                                  seed)
+    self.send_response(contact.get_tuple(), message["t"], response)
   def send_ping(self, to):
     self._log("Sending ping to "+str(to))
     result = self.send_query(to, "ping", {"id": self.id.get_20()})
@@ -144,7 +203,7 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     self._log("Sending get_peers to "+str(to)+" with hash "+hash)
     hash = Hash(hash)
     result = self.send_query(to, "get_peers", {"id": self.id.get_20(),
-                                          "info_hash": hash.get_20(),
+                                               "info_hash": hash.get_20(),
                                                "scrape": scrape})
     self.add_callback(result, lambda x: self._handle_get_peers(x, hash))
     return result
@@ -172,6 +231,9 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     """Actually do an update from within the server thread."""
     self._log("Updating routing table...")
     self.routingtable.refresh()
+    self.secrets.insert(0, hashlib.sha1(str(random.random())).digest())
+    while len(self.secrets) > NUM_SECRETS:
+      self.secrets.pop()
     self._log("Routing table updated.")
     return True
 
@@ -185,3 +247,11 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
   def _log(self, msg):
     if self.logfunc:
       self.logfunc(msg)
+
+  def check_token(self, contact, token):
+    return any(token == self.get_token(contact, x) for x in self.secrets)
+
+  def get_token(self, contact, secret=None):
+    if secret is None:
+      secret = self.secrets[0]
+    return hashlib.sha1(contact.get_packed()+secret).digest()
