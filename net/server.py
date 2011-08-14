@@ -79,9 +79,9 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     self._log("Server Started.")
   def next_tid(self):
     self.last_tid += 1
-    if (self.last_tid >= 2<<16):
+    if (self.last_tid > 0xFFFF):
       self.last_tid = 0
-    return chr(self.last_tid/((2<<8)-1))+chr(self.last_tid%((2<<8)-1))
+    return chr((self.last_tid & 0xFF00) >> 8)+chr(self.last_tid & 0x00FF)
 
   def send_query(self, to, name, args):
     query = {"y":"q", "t":self.next_tid(), "q":name, "a":args}
