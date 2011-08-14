@@ -1,4 +1,4 @@
-# FreeBencode v0.2
+# FreeBencode v0.3
 # 
 # This is a simple bencode/bdecode python module that I wrote because
 # I wasn't happy with the license of the official bittorrent one.
@@ -31,7 +31,7 @@ int_factory = long
 list_factory = list
 dict_factory = dict
 
-int_types = [int, long]
+int_types = [int, long, bool]
 str_types = [basestring, buffer]
 list_types = [list, tuple]
 dict_types = [dict]

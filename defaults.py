@@ -24,6 +24,7 @@ find_hash =
 get_peers_host =
 get_peers_port = 6881
 get_peers_hash =
+get_peers_scrape = False
 """
 
 default_config = ConfigParser.RawConfigParser()

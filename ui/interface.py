@@ -198,10 +198,6 @@ class Interface(gtk.Window):
       self.stop_server()
 
   def start_server(self, widget=None):
-    host = self.cfg.get("last", "server_host")
-    port = self.cfg.get("last", "server_port")
-    hash = self.cfg.get("last", "server_hash")
-
     dialog = dialogs.ServerDialog(self, "Start Server...", self.cfg,
                                   upnp.HAVE_UPNP)
 
@@ -360,19 +356,22 @@ class Interface(gtk.Window):
     else:
       port = str(port)
     hash = self.cfg.get("last", "get_peers_hash")
+    scrape = self.cfg.getboolean("last", "get_peers_scrape")
 
-    dialog = dialogs.HostDialog(self, "Get Peers...", host, port, hash)
+    dialog = dialogs.GetPeersDialog(self, "Get Peers...", host, port,
+                                    hash, scrape)
 
     response = dialog.run()
     dialog.destroy()
     if response is not None:
-      host, port, hash = response
+      host, port, hash, scrape = response
 
       self.cfg.set("last", "get_peers_host", host)
       self.cfg.set("last", "get_peers_port", str(port))
       self.cfg.set("last", "get_peers_hash", hash)
+      self.cfg.set("last", "get_peers_scrape", str(scrape))
 
-      self.server.send_get_peers((host, port), hash)
+      self.server.send_get_peers((host, port), hash, scrape)
 
   def load_torrent(self, widget):
     dialog = gtk.FileChooserDialog("Choose a torrent", self,

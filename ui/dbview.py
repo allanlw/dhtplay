@@ -57,6 +57,12 @@ class BaseDBView(gtk.ScrolledWindow):
     self.emit("cursor-changed", self._data[pathinfo])
   def set_cursor(self, path, focus_column=None):
     self._view.set_cursor(path, focus_column)
+  def get_cursor(self):
+    path = self._view.get_cursor()[0]
+    try:
+      return self._data[path]
+    except TypeError:
+      return None
   def _find_row(self, col, value):
     iter = self._data.get_iter(0)
     while (iter is not None and
@@ -230,10 +236,12 @@ class NodeView(DBView):
     self._update_node_row(router.get_node_row(hash))
 
 class TorrentView(DBView):
-  schema = (int, str, str, float)
+  schema = (int, str, str, float, float, float)
   cols = (
     ("ID", 0, 0),
     ("Info Hash", 1, 1),
+    ("Num Seeds", 4, 4),
+    ("Num Peers", 5, 5),
     ("Updated", 2, 3)
   )
   def __init__(self, db = None):
@@ -250,13 +258,17 @@ class TorrentView(DBView):
   def _add_torrent_row(self, row):
     self._data.append((row["id"], row["hash"].get_hex(),
                        row["updated"].ctime(),
-                       time.mktime(row["updated"].timetuple())))
+                       time.mktime(row["updated"].timetuple()),
+                       row["seeds"].get_estimate(),
+                       row["peers"].get_estimate()))
   def _update_torrent_row(self, row):
     iter = self._find_row(0, row["id"])
     if iter is not None:
       self._data.set(iter, 0, row["id"], 1, row["hash"].get_hex(),
                         2, row["updated"].ctime(),
-                        3, time.mktime(row["updated"].timetuple()))
+                        3, time.mktime(row["updated"].timetuple()),
+                        4, row["seeds"].get_estimate(),
+                        5, row["peers"].get_estimate())
   def _do_torrent_added(self, db, hash):
     self._add_torrent_row(db.get_torrent_row(hash))
   def _do_torrent_changed(self, db, hash):
@@ -302,26 +314,46 @@ class TorrentPeerView(SetFilterDBView):
     SetFilterDBView.__init__(self, peerview, 0)
     self.torrentview = torrentview
     self.torrentview.connect("cursor-changed", self._do_cursor_changed)
-  def _do_cursor_changed(self, view, row):
+
+    peerview._data.connect("row-changed", self._refresh_allowed)
+    peerview._data.connect("row-deleted", self._refresh_allowed)
+    peerview._data.connect("row-inserted", self._refresh_allowed)
+  def _do_cursor_changed(self, view, row=None):
+    if row is None:
+      row = view.get_cursor()
+    if row is None:
+      return
     t_id = row[0]
     self._clear_allowed()
     if self.torrentview._db is not None:
       peers = self.torrentview._db.get_torrent_peers(t_id)
       self._add_allowed(p[0] for p in peers)
     self.refresh()
+  def _refresh_allowed(self, treemodel=None, path=None, iter=None):
+    self._do_cursor_changed(self.torrentview)
 
 class PeerTorrentView(SetFilterDBView):
   def __init__(self, peerview, torrentview):
     SetFilterDBView.__init__(self, torrentview, 0)
     self.peerview = peerview
     self.peerview.connect("cursor-changed", self._do_cursor_changed)
-  def _do_cursor_changed(self, view, row):
+
+    torrentview._data.connect("row-changed", self._refresh_allowed)
+    torrentview._data.connect("row-deleted", self._refresh_allowed)
+    torrentview._data.connect("row-inserted", self._refresh_allowed)
+  def _do_cursor_changed(self, view, row=None):
+    if row == None:
+      row = view.get_cursor()
+    if row is None:
+      return
     p_id = row[0]
     self._clear_allowed()
     if self.peerview._db is not None:
       torrents = self.peerview._db.get_peer_torrents(p_id)
       self._add_allowed(t[0] for t in torrents)
     self.refresh()
+  def _refresh_allowed(self, treemodel=None, path=None, iter=None):
+    self._do_cursor_changed(self.peerview)
 
 class BucketNodeView(SetFilterDBView):
   def __init__(self, bucketview, nodeview):

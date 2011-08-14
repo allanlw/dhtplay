@@ -57,12 +57,24 @@ class TorrentDB(gobject.GObject):
     torrent_row = c.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
                                (torrent, ))
     if torrent_row is None:
+      seed_bloom = BloomFilter()
+      peer_bloom = BloomFilter()
+      if seed:
+        seed_bloom.insert_host(peer)
+      else:
+        peer_bloom.insert_host(peer)
       c.execute("INSERT INTO torrents VALUES (NULL, ?, ?, ?, ?, ?)",
-                (torrent, now, now, BloomFilter(), BloomFilter()))
+                (torrent, now, now, seed_bloom, peer_bloom))
       signal = "torrent-added"
     else:
-      c.execute("UPDATE torrents SET updated=? WHERE id=?",
-                (now, torrent_row["id"]))
+      seed_bloom = torrent_row["seeds"]
+      peer_bloom = torrent_row["peers"]
+      if seed:
+        seed_bloom.insert_host(peer)
+      else:
+        peer_bloom.insert_host(peer)
+      c.execute("UPDATE torrents SET updated=?,seeds=?,peers=? WHERE id=?",
+                (now, torrent_row["id"], seed_bloom, peer_bloom))
       signal = "torrent-changed"
 
     torrent_row = c.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
@@ -107,3 +119,15 @@ class TorrentDB(gobject.GObject):
   def get_peer_torrents(self, id):
     return self.conn.select("""SELECT peer_torrents.torrent_id FROM peer_torrents
                                WHERE peer_torrents.peer_id=?""", (id,))
+  def add_filter(self, filter, hash, seed):
+    now = datetime.now()
+    if seed:
+      key = "seeds"
+    else:
+      key = "peers"
+    row = self.get_torrent_row(hash)
+    new = row[key] | filter
+
+    self.conn.execute("UPDATE torrents SET updated=?, {0}=? WHERE id=?".format(key),
+              (now, new, row["id"]))
+    glib.idle_add(self.emit, "torrent-changed", hash)

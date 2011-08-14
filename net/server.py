@@ -140,11 +140,12 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     id = Hash(message["r"]["id"])
     self.routingtable._handle_find_response(id, message)
 
-  def send_get_peers(self, to, hash):
+  def send_get_peers(self, to, hash, scrape):
     self._log("Sending get_peers to "+str(to)+" with hash "+hash)
     hash = Hash(hash)
     result = self.send_query(to, "get_peers", {"id": self.id.get_20(),
-                                          "info_hash": hash.get_20()})
+                                          "info_hash": hash.get_20(),
+                                               "scrape": scrape})
     self.add_callback(result, lambda x: self._handle_get_peers(x, hash))
     return result
   def _handle_get_peers(self, message, hash):
@@ -153,6 +154,10 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
         self.torrents.add_torrent(ContactInfo(n), hash)
     if message["r"].has_key("nodes"):
       self.add_nodes(message["r"]["nodes"])
+    if message["r"].has_key("BFsp"):
+      self.torrents.add_filter(BloomFilter(message["r"]["BFsp"]), hash, True)
+    if message["r"].has_key("BFpe"):
+      self.torrents.add_filter(BloomFilter(message["r"]["BFpe"]), hash, False)
     self.routingtable._handle_get_peers_response(Hash(message["r"]["id"]), message)
 
   def load_torrent(self, filename):

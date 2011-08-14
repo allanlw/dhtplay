@@ -17,7 +17,8 @@ class ContactInfo:
     self.host = host
     if len(self.host) == 4:
       self.host = socket.inet_ntop(socket.AF_INET, self.host)
-    elif len(self.host) == 16:
+    elif (len(self.host) == 16 and
+          any(not x.isdigit() or x is not ":" for x in self.host)):
       self.host = socket.inet_ntop(socket.AF_INET6, self.host)
     self.port = port
     if isinstance(self.port, basestring):

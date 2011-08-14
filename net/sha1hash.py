@@ -13,7 +13,7 @@ class Hash:
       else:
         id = self.id
         while len(id) < 20:
-          id = "\0" + id
+          id = "\x00" + id
         self.id = 0
         for c in id:
           self.id = self.id << 8
@@ -26,7 +26,7 @@ class Hash:
     id = self.id
     result = ""
     while id != 0:
-      result = chr(id % 256) + result
+      result = chr(id & 0xFF) + result
       id = id >> 8
     while len(result) < 20:
       result = "\x00" + result
