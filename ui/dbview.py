@@ -34,6 +34,8 @@ class BaseDBView(gtk.ScrolledWindow):
         renderer.set_active(False)
       else:
         renderer = gtk.CellRendererText()
+        if len(col) > 3 and col[3]:
+          renderer.set_property("family", "MonoSpace")
       col_widget.pack_start(renderer)
       col_widget.set_sort_column_id(col[2])
       if self._data.get_column_type(col[1]) == gobject.TYPE_BOOLEAN:
@@ -183,7 +185,7 @@ class NodeView(DBView):
     ("Pending", 6, 6),
     ("Host", 1, 1),
     ("Port", 2, 2),
-    ("Hash", 3, 3),
+    ("Hash", 3, 3, True),
     ("Last Good", 4, 5),
   )
   def __init__(self, bucketview, routingtable=None):
@@ -239,7 +241,7 @@ class TorrentView(DBView):
   schema = (int, str, str, float, float, float)
   cols = (
     ("ID", 0, 0),
-    ("Info Hash", 1, 1),
+    ("Info Hash", 1, 1, True),
     ("Num Seeds", 4, 4),
     ("Num Peers", 5, 5),
     ("Updated", 2, 3)

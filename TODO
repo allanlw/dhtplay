@@ -1,7 +1,6 @@
 TODO:
 * support sending announce_peer packets
-* Add indicator if not receiving any incoming queries (works?)
 * Add responding to queries support
 * proper input validation / error handling everywhere
 * move dht, upnp options into the configuration file
-* Re-impliment fixed width columns for hashes
+* Add indicator if not receiving any incoming queries (works?)
