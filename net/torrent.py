@@ -131,3 +131,5 @@ class TorrentDB(gobject.GObject):
     self.conn.execute("UPDATE torrents SET updated=?, {0}=? WHERE id=?".format(key),
               (now, new, row["id"]))
     glib.idle_add(self.emit, "torrent-changed", hash)
+  def get_magnet(self, hash):
+    return "magnet:?urn:btih:{0}".format(hash.get_hex())

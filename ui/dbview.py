@@ -328,7 +328,10 @@ class TorrentPeerView(SetFilterDBView):
     t_id = row[0]
     self._clear_allowed()
     if self.torrentview._db is not None:
-      peers = self.torrentview._db.get_torrent_peers(t_id)
+      try:
+        peers = self.torrentview._db.get_torrent_peers(t_id)
+      except RuntimeError: # sql connection closed, server shut down
+        return
       self._add_allowed(p[0] for p in peers)
     self.refresh()
   def _refresh_allowed(self, treemodel=None, path=None, iter=None):
@@ -351,7 +354,10 @@ class PeerTorrentView(SetFilterDBView):
     p_id = row[0]
     self._clear_allowed()
     if self.peerview._db is not None:
-      torrents = self.peerview._db.get_peer_torrents(p_id)
+      try:
+        torrents = self.peerview._db.get_peer_torrents(p_id)
+      except RuntimeError: # sql connection has closed, server shut down
+        return
       self._add_allowed(t[0] for t in torrents)
     self.refresh()
   def _refresh_allowed(self, treemodel=None, path=None, iter=None):

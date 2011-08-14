@@ -5,10 +5,12 @@ import glib
 import gobject
 import threading
 import time
+import webbrowser
 
 from net.server import DHTServer
 from ui import dialogs
 from ui import dbview
+from ui import images
 from net.contactinfo import ContactInfo
 from net.sha1hash import Hash
 from ui.statuslabel import StatusLabel
@@ -121,6 +123,7 @@ class Interface(gtk.Window):
     self.peerview = dbview.PeerView()
 
     self.torrentview = dbview.TorrentView()
+    self.torrentview.connect("right-click", self._do_torrentview_right_click)
 
     self.bucketnodeview = dbview.BucketNodeView(self.bucketview,
                                                 self.nodeview)
@@ -130,6 +133,7 @@ class Interface(gtk.Window):
                                                   self.peerview)
     self.peertorrentview = dbview.PeerTorrentView(self.peerview,
                                                   self.torrentview)
+    self.peertorrentview.connect("right-click", self._do_torrentview_right_click)
 
     self.notebook.append_page(self.nodeview, gtk.Label("Nodes"))
 
@@ -440,14 +444,46 @@ class Interface(gtk.Window):
       sep.show()
 
       goto_nodes = gtk.MenuItem("View in Nodes Tab")
-      goto_nodes.connect("activate", self.goto_nodes_tab, treeview)
+      goto_nodes.connect("activate", self.goto_tab, treeview, 0)
       menu.add(goto_nodes)
       goto_nodes.show()
 
     menu.popup(None, None, None, event.button, event.time)
 
-  def goto_nodes_tab(self, w, treeview):
-    self.notebook.set_current_page(0)
+  def _do_torrentview_right_click(self, treeview, event, row):
+    menu = gtk.Menu()
+
+    copy_infohash = gtk.ImageMenuItem(gtk.STOCK_COPY)
+    copy_infohash.set_label("Copy InfoHash")
+    copy_infohash.connect("activate",
+                          lambda x: gtk.Clipboard().set_text(row[1]))
+    menu.add(copy_infohash)
+    copy_infohash.show()
+
+    if self.server is not None:
+      open_magnet = gtk.ImageMenuItem()
+      open_magnet.set_image(gtk.image_new_from_pixbuf(images.magnet))
+      open_magnet.set_label("Open Magnet URI")
+      open_magnet.connect("activate",
+                          lambda x: webbrowser.open(
+                            self.server.torrents.get_magnet(Hash(row[1]))))
+      menu.add(open_magnet)
+      open_magnet.show()
+
+    if treeview is self.peertorrentview:
+      sep = gtk.SeparatorMenuItem()
+      menu.add(sep)
+      sep.show()
+
+      goto_torrents = gtk.MenuItem("View in Torrents Tab")
+      goto_torrents.connect("activate", self.goto_tab, treeview, 2)
+      menu.add(goto_torrents)
+      goto_torrents.show()
+
+    menu.popup(None, None, None, event.button, event.time)
+
+  def goto_tab(self, w, treeview, page):
+    self.notebook.set_current_page(page)
     treeview.goto_parent()
 
   def error(self, message):
