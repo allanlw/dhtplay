@@ -6,3 +6,5 @@ TODO:
 * UPnP timeout investigation? Doesn't work on second try? freezes????
 * Add support for removing torrents, peers and nodes
 * Add support for keeping nodes that don't have infohashes (yet) in the DB so that sent accounting can be kept track of and incoming isn't assumed for nodes that were known beforehand
+* Handle hash, contactinfo clashes properly.
+* Check that all/most common queries are indexed.
