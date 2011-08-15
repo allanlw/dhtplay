@@ -4,3 +4,6 @@ TODO:
 * proper input validation / error handling everywhere (including malformed packets, etc.)
 * move dht, upnp options into the configuration file
 * UPnP timeout investigation? Doesn't work on second try? freezes????
+* Add support for removing torrents, peers and nodes
+* Add support for keeping nodes that don't have infohashes (yet) in the DB so that sent accounting can be kept track of and incoming isn't assumed for nodes that were known beforehand
+

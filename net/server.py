@@ -13,6 +13,7 @@ from net.sha1hash import Hash
 from net.contactinfo import ContactInfo
 from net.bencode import *
 from net.bloom import BloomFilter
+import version
 
 REFRESH_CHECK = 30 # s
 NUM_SECRETS = 20 # s
@@ -31,16 +32,20 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
       if self.server.routingtable.get_node_row(c) == None:
         self.server.incoming = True
     self.server._log("From "+str(c)+":"+str(message))  
+    try:
+      version = message["v"]
+    except KeyError:
+      version = None
 
     try:
       self.server.routingtable.add_node(c,
-                                        Hash(message["r"]["id"]))
+                                        Hash(message["r"]["id"]), version, True)
     except KeyError:
       pass
 
     try:
       self.server.routingtable.add_node(c,
-                                        Hash(message["a"]["id"]))
+                                        Hash(message["a"]["id"]), version, True)
     except KeyError:
       pass
 
@@ -84,15 +89,16 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     return chr((self.last_tid & 0xFF00) >> 8)+chr(self.last_tid & 0x00FF)
 
   def send_query(self, to, name, args):
-    query = {"y":"q", "t":self.next_tid(), "q":name, "a":args}
+    query = {"y":"q", "t":self.next_tid(), "q":name, "a":args,
+             "v":version.four_byte}
     self.send_msg(to, query)
     return query["t"]
   def send_response(self, to, tid, args):
-    response = {"y":"r", "t":tid, "r": args}
+    response = {"y":"r", "t":tid, "r": args, "v":version.four_byte}
     self.send_msg(to, response)
     return response["t"]
   def send_error(self, to, tid, args):
-    error = {"t":"e", "t":tid, "e":args}
+    error = {"t":"e", "t":tid, "e":args, "v":version.four_byte}
     self.send_msg(to, error)
     return error["t"]
   def send_msg(self, to, msg):

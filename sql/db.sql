@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS nodes (
   bucket_id INTEGER NOT NULL,
   good BOOLEAN NOT NULL,
   pending BOOLEAN NOT NULL,
+  version BLOB NULL,
+  received INTEGER NOT NULL,
   created timestamp NOT NULL,
   updated timestamp NOT NULL,
 

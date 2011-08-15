@@ -1,6 +1,7 @@
 import gtk
 import gobject
 import time
+import urllib
 
 from net.sha1hash import Hash
 from net.contactinfo import ContactInfo
@@ -179,13 +180,15 @@ class BucketView(DBView):
       self._data.set(iter, 3, self._data.get_value(iter, 3)+amt)
 
 class NodeView(DBView):
-  schema = (int, str, int, str, str, float, bool)
+  schema = (int, str, int, str, str, float, bool, str, int)
   cols = (
     ("Bucket", 0, 0),
     ("Pending", 6, 6),
     ("Host", 1, 1),
     ("Port", 2, 2),
     ("Hash", 3, 3, True),
+    ("Version", 7, 7),
+    ("Received", 8, 8),
     ("Last Good", 4, 5),
   )
   def __init__(self, bucketview, routingtable=None):
@@ -204,12 +207,16 @@ class NodeView(DBView):
     for node in self._db.get_node_rows():
       self._add_node_row(node)
   def _add_node_row(self, row):
+    version = row["version"]
+    if version is not None:
+      version = urllib.quote(str(version))
     self._data.append((row["bucket_id"],
                        row["contact"].host, row["contact"].port,
                        row["hash"].get_hex(),
                        row["updated"].ctime(),
                        time.mktime(row["updated"].timetuple()),
-                       row["pending"]))
+                       row["pending"], version,
+                       row["received"]))
     if not row["pending"]:
       self.bucketview._mod_bucket_row(row["bucket_id"], +1)
   def _update_node_row(self, row):
@@ -217,12 +224,16 @@ class NodeView(DBView):
     if iter is not None:
       if not self._data.get_value(iter, 6):
         self.bucketview._mod_bucket_row(self._data.get_value(iter, 0), -1)
+      version = row["version"]
+      if version is not None:
+        version = urllib.quote(str(version))
       self._data.set(iter, 0, row["bucket_id"],
                      1, row["contact"].host, 2, row["contact"].port,
                      3, row["hash"].get_hex(),
                      4, row["updated"].ctime(),
                      5, time.mktime(row["updated"].timetuple()),
-                     6, row["pending"])
+                     6, row["pending"], 7, version,
+                     8, row["received"])
       if not row["pending"]:
         self.bucketview._mod_bucket_row(row["bucket_id"], +1)
   def _remove_node_row(self, hash):

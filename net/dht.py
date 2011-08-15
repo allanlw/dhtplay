@@ -52,10 +52,12 @@ class DHTRoutingTable(gobject.GObject):
                         (lower, upper, now, now))
     glib.idle_add(self.emit, "changed")
 
-  def _add_node(self, hash, contact, bucket, good, time, pending=False):
-    id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?,?,?,?,?,?,?)",
-                          (hash, contact,
-                           bucket, good, pending, time, time))
+  def _add_node(self, hash, contact, bucket, good, time, pending=False,
+                version=None, received=False):
+    received = int(received)
+    id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?,?,?,?,?,?,?,?,?)",
+                          (hash, contact, bucket, good, pending,
+                           version, received, time, time))
     glib.idle_add(self.emit, "node-added", hash)
     if not pending:
       self.conn.execute("UPDATE buckets SET updated=? WHERE id=?",
@@ -104,14 +106,18 @@ class DHTRoutingTable(gobject.GObject):
                           (newb,row["id"]))
         glib.idle_add(self.emit, "node-changed", h)
 
-  def add_node(self, contact, hash):
+  def add_node(self, contact, hash, version=None, received=False):
+    if version is not None:
+      version = buffer(version)
     now = datetime.now()
 
     node_row = self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
                                     (hash,))
     if node_row is not None:
-      self.conn.execute("UPDATE nodes SET updated=? WHERE id=?",
-                        (now, node_row["id"]))
+      received = int(received)
+      self.conn.execute("""UPDATE nodes SET updated=?, version=?,
+                           received=received+? WHERE id=?""",
+                        (now, version, received, node_row["id"]))
       glib.idle_add(self.emit, "node-changed", hash)
       return
 
@@ -131,19 +137,21 @@ class DHTRoutingTable(gobject.GObject):
 
     if count < MAX_BUCKET_SIZE:
       # add normally
-      self._add_node(hash, contact, bucket_row["id"], True, now)
+      self._add_node(hash, contact, bucket_row["id"], True, now, False,
+                     version, received)
     elif (bstart <= self.server.id.get_int() and
           self.server.id.get_int() < bend):
       # split bucket
       self._split_bucket(now, bucket_row, bstart, bend)
-      self.add_node(contact, hash)
+      self.add_node(contact, hash, version, received)
     else:
       # add pending
       culled = self._cull_bucket(now, bucket_row["id"])
       if culled:
-        self.add_node(contact, hash)
+        self.add_node(contact, hash, version, received)
       else:
-        self._add_node(hash, contact, bucket_row["id"], True, now, True)
+        self._add_node(hash, contact, bucket_row["id"], True, now, True,
+                       version, received)
   def get_node_row(self, n):
     if isinstance(n, ContactInfo):
       return self.conn.select_one("SELECT * FROM nodes WHERE contact=? LIMIT 1",
