@@ -19,41 +19,95 @@ REFRESH_CHECK = 30 # s
 NUM_SECRETS = 20 # s
 
 class DHTRequestHandler(SocketServer.DatagramRequestHandler):
+  """Handler for DHT packets over UDP."""
   def handle(self):
+    """Handle a new DHT packet."""
     enc_message = self.rfile.read()
+    if self.client_address == self.server.updatesocket.getsockname():
+      self.server._update()
+      return
     if not enc_message:
       return
     message = bdecode(enc_message)[0]
-    if message.has_key("q") and message["q"] == "refresh":
-      self.server._update()
-      return
     c = ContactInfo(*self.client_address)
-    if not self.server.incoming:
-      if self.server.routingtable.get_node_row(c) == None:
-        self.server.incoming = True
     self.server._log("From "+str(c)+":"+str(message))  
+    if message["y"] == "q":
+      self.handle_query(c, message)
+    else:
+      self.handle_response(c, message)
+
+  def handle_query(self, contact, message):
+    """Handle a Query packet."""
+    if not self.server.incoming:
+      if self.server.routingtable.get_node_row(contact) == None:
+        self.server.incoming = True
+
     try:
       version = message["v"]
     except KeyError:
       version = None
+    try:
+      self.server.routingtable.add_node(contact,
+                                        Hash(message["a"]["id"]), version, True)
+    except KeyError:
+      pass
 
+    response = {"id": self.server.id.get_20()}
+    if message["q"] == "ping":
+      pass
+    elif message["q"] == "find_node":
+      nodes = ""
+      for row in self.server.routingtable.get_closest(Hash(message["a"]["target"])):
+        nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
+      response["nodes"] = nodes
+    elif message["q"] == "get_peers":
+      nodes = ""
+      for row in self.server.routingtable.get_closest(Hash(message["a"]["info_hash"])):
+        nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
+      response["nodes"] = nodes
+
+      trow = self.server.torrents.get_torrent_row(Hash(message["a"]["info_hash"]))
+      if trow is not None:
+        values = []
+        ids = self.server.torrents.get_torrent_peers(trow["id"],
+                                           (message["a"].has_key("noseed") and
+                                            message["a"]["noseed"]))
+        for id in ids:
+          row = self.server.torrents.get_peer_by_id(id[0])
+          values.append(row["contact"].get_packed())
+        if values:
+          response["values"] = values
+        if message["a"].has_key("scrape") and message["a"]["scrape"]:
+          response["BFsd"] = trow["seeds"].get_bin()
+          response["BFpe"] = trow["peers"].get_bin()
+      response["token"] = self.get_token(contact)
+    elif message["q"] == "announce_peer": 
+      if self.server.check_token(message["a"]["token"]):
+        seed = False
+        if message["a"].has_key("seed") and message["a"]["seed"]:
+          seed = True
+        self.server.torrents.add_torrent(ContactInfo(contact.host,
+                                                     message["a"]["port"]),
+                                         Hash(message["a"]["info_hash"]),
+                                         seed)
+      else:
+        pass # TODO send error
+    self.send_response(contact.get_tuple(), message["t"], response)
+  def handle_response(self, contact, message):
+    """Handle a response packet."""
+    try:
+      version = message["v"]
+    except KeyError:
+      version = None
     try:
       self.server.routingtable.add_node(c,
                                         Hash(message["r"]["id"]), version, True)
     except KeyError:
       pass
-
-    try:
-      self.server.routingtable.add_node(c,
-                                        Hash(message["a"]["id"]), version, True)
-    except KeyError:
-      pass
-
-    if message["y"] == "q":
-      self.server.handle_query(c, message)
     if self.server.callbacks.has_key(message["t"]):
       while self.server.callbacks[message["t"]]:
         self.server.callbacks[message["t"]].pop()(message)
+
 
 class DHTServer(SocketServer.UDPServer, gobject.GObject):
   incoming = gobject.property(type=bool, default=False)
@@ -137,50 +191,6 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     traceback.print_exc() # XXX But this goes to stderr!
 
   def handle_query(self, contact, message):
-    response = {"id": self.id.get_20()}
-    if message["q"] == "ping":
-      pass
-    elif message["q"] == "find_node":
-      nodes = ""
-      for row in self.routingtable.get_closest(Hash(message["a"]["target"])):
-        nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
-      response["nodes"] = nodes
-    elif message["q"] == "get_peers":
-      nodes = ""
-      for row in self.routingtable.get_closest(Hash(message["a"]["info_hash"])):
-        nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
-      response["nodes"] = nodes
-
-      trow = self.torrents.get_torrent_row(Hash(message["a"]["info_hash"]))
-      if trow is not None:
-        values = []
-        noseeds = False
-        if message["a"].has_key("noseed") and message["a"]["noseed"]:
-          noseeds = True
-        ids = self.torrents.get_torrent_peers(trow["id"],
-                                              noseeds)
-        for id in ids:
-          row = self.torrents.get_peer_by_id(id[0])
-          values.append(row["contact"].get_packed())
-        if values:
-          response["values"] = values
-
-        if message["a"].has_key("scrape") and message["a"]["scrape"]:
-          response["BFsd"] = trow["seeds"].get_bin()
-          response["BFpe"] = trow["peers"].get_bin()
-
-
-      response["token"] = self.get_token(contact)
-    elif message["q"] == "announce_peer": 
-      if self.check_token(message["a"]["token"]):
-        seed = False
-        if message["a"].has_key("seed") and message["a"]["seed"]:
-          seed = True
-        self.torrents.add_torrent(ContactInfo(contact.host,
-                                              message["a"]["port"]),
-                                  Hash(message["a"]["info_hash"]),
-                                  seed)
-    self.send_response(contact.get_tuple(), message["t"], response)
   def send_ping(self, to):
     self._log("Sending ping to "+str(to))
     result = self.send_query(to, "ping", {"id": self.id.get_20()})

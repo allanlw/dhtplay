@@ -7,7 +7,7 @@ import defaults
 
 settings = "settings.cfg"
 
-if __name__ == "__main__":
+def start():
   gtk.gdk.threads_init()
   config = defaults.default_config
   config.read(settings)
@@ -20,3 +20,5 @@ if __name__ == "__main__":
     pass
   config.write(open(settings, 'w'))
 
+if __name__ == "__main__":
+  start()

@@ -8,3 +8,8 @@ TODO:
 * Add support for keeping nodes that don't have infohashes (yet) in the DB so that sent accounting can be kept track of and incoming isn't assumed for nodes that were known beforehand
 * Handle hash, contactinfo clashes properly.
 * Check that all/most common queries are indexed.
+* Entirely impliment IPv6 throughout.
+* Add sending errors for malformed DHT packets. (esp. invalid tokens)
+* Re-examine how the refresh bootstrapping works - Does it need to be a bencoded packet?
+* should the functions like _handle_ping_response be in the DHTHandler class? - I think so.
+* Should the images module export a dict instead of regular variables.

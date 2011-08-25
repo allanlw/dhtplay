@@ -10,7 +10,6 @@ from datetime import datetime
 from net.bencode import *
 from net.sha1hash import Hash
 from net.contactinfo import ContactInfo
-from net.torrent import TorrentDB
 from net.sql import SQLiteThread
 
 MAX_BUCKET_SIZE = 8
