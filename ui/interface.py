@@ -229,7 +229,7 @@ class Interface(gtk.Window):
         self.set_sensitive(False)
       else:
         self._start_server(bind, serv, hash)
-  def _do_add_port_error(self, manager, error):
+  def _do_add_port_error(self, manager, bind, error):
     # see comment in _do_port_added
     with gtk.gdk.lock:
       self.set_sensitive(True)

@@ -24,16 +24,16 @@ class TorrentDB(gobject.GObject):
       (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
        (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT))
   }
-  def __init__(self, server, conn):
+  def __init__(self, conn, logfunc):
     gobject.GObject.__init__(self)
     self.conn = conn
-    self.server = server
+    self._log = logfunc
 
   def do_torrent_added(self, torrent):
-    self.server._log("Torrent added to db ({0})".format(torrent))
+    self._log("Torrent added to db ({0})".format(torrent))
 
   def do_peer_added(self, peer):
-    self.server._log("Peer added to db ({0})".format(peer))
+    self._log("Peer added to db ({0})".format(peer))
 
   def add_torrent(self, peer, torrent, seed=False):
     now = datetime.now()

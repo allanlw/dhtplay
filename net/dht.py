@@ -16,15 +16,6 @@ MAX_BUCKET_SIZE = 8
 MAX_PENDING_PINGS = 2
 IDLE_TIMEOUT = 15 * 60 # s
 
-#  def _handle_ping_response(self, message):
-#    if message["y"] == "r" and message["r"]["id"] == self.get_id_20():
-#      self.good = True
-#      self.last_good = time.time()
-#    else:
-#      self.good = False
-#    glib.idle_add(self.emit, "changed")
-#    self.bucket.update()
-
 class DHTRoutingTable(gobject.GObject):
   __gsignals__ = {
     "changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
@@ -42,19 +33,23 @@ class DHTRoutingTable(gobject.GObject):
 
     self.conn = conn
     self.server = server
-    r = self.conn.select_one("SELECT COUNT(*) FROM buckets")
+    r = self.conn.select_one("""SELECT COUNT(*) FROM buckets
+                                WHERE server_id=?""", (self.server.num_id,))
     if r[0] == 0:
       lower = Hash(0)
       upper = Hash((1 << 160) - 1)
       now = datetime.now()
-      self.conn.execute("INSERT INTO buckets VALUES(NULL, ?, ?, ?, ?)",
-                        (lower, upper, now, now))
+      self.conn.execute("""INSERT INTO buckets(id, start, end, created, updated,
+                           server_id) VALUES(NULL, ?, ?, ?, ?, ?)""",
+                        (lower, upper, now, now, self.server.num_id))
     glib.idle_add(self.emit, "changed")
 
   def _add_node(self, hash, contact, bucket, good, time, pending=False,
                 version=None, received=False):
     received = int(received)
-    id = self.conn.insert("INSERT INTO nodes VALUES (NULL, ?,?,?,?,?,?,?,?,?)",
+    id = self.conn.insert("""INSERT INTO nodes(id, hash, contact, bucket,
+                             good, pending, version, received, created,
+                             updated) VALUES (NULL, ?,?,?,?,?,?,?,?,?)""",
                           (hash, contact, bucket, good, pending,
                            version, received, time, time))
     glib.idle_add(self.emit, "node-added", hash)
@@ -90,8 +85,11 @@ class DHTRoutingTable(gobject.GObject):
     bmid = bstart + (bend - bstart)/2
     self.conn.execute("UPDATE buckets SET end=?, updated=? WHERE id=?",
                       (Hash(bmid), now, bucket_row["id"]))
-    newb = self.conn.insert("INSERT INTO buckets VALUES (NULL, ?, ?, ?, ?)",
-                            (Hash(bmid), bucket_row["end"], now, now))
+    newb = self.conn.insert("""INSERT INTO buckets(id, start, end, created,
+                               updated, server_id) VALUES (NULL, ?, ?, ?, ?,
+                               ?)""",
+                            (Hash(bmid), bucket_row["end"], now, now,
+                             self.server.num_id))
     oldb = bucket_row["id"]
     glib.idle_add(self.emit, "bucket-split", oldb, newb)
 
@@ -110,8 +108,12 @@ class DHTRoutingTable(gobject.GObject):
       version = buffer(version)
     now = datetime.now()
 
-    node_row = self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
-                                    (hash,))
+    node_row = self.conn.select_one("""SELECT nodes.* FROM nodes INNER JOIN
+                                       buckets ON nodes.bucket_id=buckets.id
+                                       WHERE nodes.hash=? AND
+                                       buckets.server_id=?
+                                       LIMIT 1""",
+                                    (hash,self.server.id_num))
     if node_row is not None:
       received = int(received)
       self.conn.execute("""UPDATE nodes SET updated=?, version=?,
@@ -121,9 +123,10 @@ class DHTRoutingTable(gobject.GObject):
       return
 
     bucket_row = self.conn.select_one("""SELECT * FROM buckets
-                                         WHERE start<=? AND end>?
+                                         WHERE start<=? AND end>? AND
+                                         server_id=?
                                          LIMIT 1""",
-                                      (hash,hash))
+                                      (hash,hash, self.server.num_id))
     if bucket_row is None:
       raise ValueError("No bucket found???")
 
@@ -153,20 +156,32 @@ class DHTRoutingTable(gobject.GObject):
                        version, received)
   def get_node_row(self, n):
     if isinstance(n, ContactInfo):
-      return self.conn.select_one("SELECT * FROM nodes WHERE contact=? LIMIT 1",
-                                  (n,))
+      return self.conn.select_one("""SELECT nodes.* FROM nodes
+                                     INNER JOIN buckets
+                                     ON buckets.id=nodes.bucket_id
+                                     WHERE nodes.contact=? AND
+                                     buckets.server_id=? LIMIT 1""",
+                                  (n,self.server.id_num))
     elif isinstance(n, Hash):
-      return self.conn.select_one("SELECT * FROM nodes WHERE hash=? LIMIT 1",
-                                  (n,))
+      return self.conn.select_one("""SELECT nodes.* FROM nodes
+                                     INNER JOIN buckets
+                                     ON buckets.id=nodes.bucket_id
+                                     WHERE nodes.hash=? AND
+                                     buckets.server_id=? LIMIT 1""",
+                                  (n,self.server.id_num))
     else:
       raise TypeError("Unknown node identifier.")
   def get_bucket_row(self, id):
     return self.conn.select_one("SELECT * FROM buckets WHERE id=? LIMIT 1",
                                 (id,))
   def get_node_rows(self):
-    return self.conn.select("SELECT * FROM nodes")
+    return self.conn.select("""SELECT nodes.* FROM nodes INNER JOIN buckets
+                               ON buckets.id=nodes.bucket_id
+                               WHERE buckets.server_id=?""",
+                            (self.server.id_num,))
   def get_bucket_rows(self):
-    return self.conn.select("SELECT * FROM buckets")
+    return self.conn.select("SELECT * FROM buckets WHERE server_id=?",
+                            (self.server.id_num,))
   def do_bucket_split(self, bucket1, bucket2):
     self.server._log("Bucket split ({0}, {1})".format(bucket1, bucket2))
     self.emit("changed")
@@ -182,7 +197,10 @@ class DHTRoutingTable(gobject.GObject):
     self.emit("changed")
   def refresh(self):
     now = datetime.now()
-    rows = self.conn.select("SELECT * FROM nodes WHERE pending")
+    rows = self.conn.select("""SELECT nodes.* FROM nodes INNER JOIN buckets
+                               ON buckets.id=nodes.bucket_id
+                               WHERE nodes.pending AND buckets.server_id=?""",
+                            (self.server.id_num,))
     for row in rows:
       if not (now - row["updated"]).seconds < IDLE_TIMEOUT or not row["good"]:
         self._delete_node(row["id"], row["hash"])
@@ -198,7 +216,8 @@ class DHTRoutingTable(gobject.GObject):
           glib.idle_add(self.emit, "bucket-changed",
                         row["bucket_id"])
 
-    rows = self.conn.select("SELECT * FROM buckets")
+    rows = self.conn.select("SELECT * FROM buckets WHERE server_id=?",
+                            (self.server.id_num,))
     for r in rows:
       if (now - r["updated"]).seconds > IDLE_TIMEOUT:
         self._refresh_bucket(r["id"])
@@ -218,8 +237,10 @@ class DHTRoutingTable(gobject.GObject):
   def close(self):
     pass
   def get_closest(self, hash):
-    r = self.conn.select("""SELECT * FROM nodes
-                            ORDER BY xor(hash, ?) ASC
+    r = self.conn.select("""SELECT nodes.* FROM nodes INNER JOIN buckets
+                            ON buckets.id=nodes.bucket_id
+                            WHERE buckets.server_id=?
+                            ORDER BY xor(nodes.hash, ?) ASC
                             LIMIT ?""",
-                         (hash.get_20(), MAX_BUCKET_SIZE))
+                         (self.server.id_num, hash, MAX_BUCKET_SIZE))
     return r

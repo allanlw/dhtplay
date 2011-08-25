@@ -16,7 +16,7 @@ class UPNPManager(gobject.GObject):
     "port-added": (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
       (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
     "add-port-error": (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
-      (str,))
+      (gobject.TYPE_PYOBJECT, str))
   }
   lease_description = "UPNP port forwarded by "+version.full
   lease_duration = 5*60 # Five minute lease time - tread lightly
@@ -56,6 +56,7 @@ class UPNPManager(gobject.GObject):
       e = error.message
     else:
       e = ""
-    glib.idle_add(self.emit, "add-port-error", e)
+    glib.idle_add(self.emit, "add-port-error",
+                  ContactInfo(local_ip, local_port), e)
   def shutdown(self):
     self.igd.delete_all_mappings()

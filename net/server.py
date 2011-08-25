@@ -108,12 +108,13 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
       while self.server.callbacks[message["t"]]:
         self.server.callbacks[message["t"]].pop()(message)
 
-
-class DHTServer(SocketServer.UDPServer, gobject.GObject):
+class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
   incoming = gobject.property(type=bool, default=False)
 
   allow_reuse_address = True
-  def __init__(self, config, id, bind, serv, logfunc=None):
+  daemon_threads = True
+  def __init__(self, config, id_num, id, bind, serv, conn, torrents,
+               logfunc=None):
     self.logfunc = logfunc
     self._log("Server Starting...")
 
@@ -124,11 +125,10 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
     self.callbacks = {}
     self.config = config
     self.secrets = [hashlib.sha1(str(random.random())).digest()]
-    self.conn = SQLiteThread(self.config.get("torrent", "db"))
-    self.conn.start()
-    self.conn.executescript(open("sql/db.sql","r").read())
-    self.torrents = TorrentDB(self, self.conn)
+    self.conn = conn
+    self.torrents = torrents
     self.id = Hash(id)
+    self.id_num = id_num
     self.timeout_id = glib.timeout_add_seconds(REFRESH_CHECK,
                                                self._send_update)
     self.routingtable = DHTRoutingTable(self, self.conn)
@@ -136,7 +136,7 @@ class DHTServer(SocketServer.UDPServer, gobject.GObject):
                                       socket.SOCK_DGRAM)
 
     self._log("Server Started.")
-  def next_tid(self):
+   def next_tid(self):
     self.last_tid += 1
     if (self.last_tid > 0xFFFF):
       self.last_tid = 0
