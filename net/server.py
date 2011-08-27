@@ -183,10 +183,7 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
   def shutdown(self):
     self._log("Server Stopping...")
     glib.source_remove(self.timeout_id)
-    SocketServer.UDPServer.shutdown(self)
-    self.torrents.close()
     self.routingtable.close()
-    self.conn.close()
     self._log("Server Stopped.")
   def add_nodes(self, nodes):
     while nodes:

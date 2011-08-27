@@ -71,7 +71,7 @@ class ServerWrangler(gobject.GObject):
     row = self.conn.select_one("SELECT * FROM servers WHERE bind=?",
                                (internal,))
     self._do_add_server(row["hash"], internal, external, row["id"])
-  def _add_port_error(self, internal, error):
+  def _add_port_error(self, manager, internal, error):
     glib.idle_add(self.emit, "upnp-error", internal, error)
   def _log(self, msg):
     if self.logfunc:
@@ -101,5 +101,11 @@ class ServerWrangler(gobject.GObject):
   def shutdown(self):
     self.running = False
     if self.thread is not None:
-      self.thread.join()
+      try:
+        self.thread.join()
+      except:
+        pass
+    for server in self.servers:
+      server.shutdown()
     self.upnp.shutdown()
+    self.conn.close()

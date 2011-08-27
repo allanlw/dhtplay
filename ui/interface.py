@@ -102,15 +102,19 @@ class Interface(gtk.Window):
     # Work area
 
     serverpane = gtk.HPaned()
-    vbox.pack_start(serverpane)
+    vbox.pack_start(serverpane, True, True)
 
     self.serverview = dbview.ServerView(self.serverwrangler)
     self.serverview.connect("cursor-changed",
                             self._do_serverview_cursor_changed)
     serverpane.pack1(self.serverview, True, True)
 
+    server_frame = gtk.Frame()
+    server_frame.set_shadow_type(gtk.SHADOW_IN)
+    serverpane.pack2(server_frame, True, True)
+
     server_area = gtk.VBox()
-    serverpane.pack2(server_area, True, True)
+    server_frame.add(server_area)
 
     # Server Area
 
