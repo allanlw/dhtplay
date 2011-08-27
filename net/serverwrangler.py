@@ -6,25 +6,28 @@ import threading
 
 from net.server import DHTServer
 from net.sql import SQLiteThread
-from net.torrents import TorrentDB
+from net.torrent import TorrentDB
 from net.upnp import UPNPManager
 from net.contactinfo import ContactInfo
 
 class ServerWrangler(gobject.GObject):
+  incoming = gobject.property(type=bool, default=False)
   __gsignals__ = {
     "server-added": (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
       (DHTServer,)),
-    "upnp-error": (gobject.SIGNAL_RUN_LASt, gobject.TYPE_NON,
-      (ContactInfo, str))
+    "upnp-error": (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
+      (gobject.TYPE_PYOBJECT, str))
   }
   timeout = 100
   def __init__(self, config, logfunc=None):
     gobject.GObject.__init__(self)
 
+    self.running = False
     self.logfunc = logfunc
     self.config = config
     self.servers = []
     self.pending = Queue.Queue()
+    self.thread = None
 
     self.upnp = UPNPManager()
     self.upnp.connect("port-added", self._port_added)
@@ -52,28 +55,35 @@ class ServerWrangler(gobject.GObject):
         server_id = self.conn.insert("""INSERT INTO servers(hash, bind, host,
                                         upnp) VALUES (?, ?, ?, ?)""",
                                    (hash, bind, host, False))
-      self._do_add_server(hash, bind, host)
-  def _do_add_server(self, hash, bind, host):
-      new_server = DHTServer(self.config, server_id, hash, bind, host,
-                             self.conn, self.torrents, self._log)
-      self.pending.put(new_server)
-      glib.idle_add(self.emit, "server-added", new_server)
-  def _port_added(self, external, internal):
+      else:
+        server_id = self.conn.select_one("""SELECT id FROM servers WHERE
+                                            hash=?""", (hash,))["id"]
+      self._do_add_server(hash, bind, host, server_id)
+  def _do_add_server(self, hash, bind, host, id):
+    new_server = DHTServer(self.config, id, hash, bind, host,
+                           self.conn, self.torrents, self._log)
+    new_server.connect("notify::incoming", self._do_notified)
+    self.pending.put(new_server)
+    glib.idle_add(self.emit, "server-added", new_server)
+  def _do_notified(self, server, value):
+    self.incoming = (value or self.incoming)
+  def _port_added(self, manager, external, internal):
     row = self.conn.select_one("SELECT * FROM servers WHERE bind=?",
                                (internal,))
-    self._do_add_server(row["hash"], internal, external)
-  def _port_added_error(self, internal, error):
+    self._do_add_server(row["hash"], internal, external, row["id"])
+  def _add_port_error(self, internal, error):
     glib.idle_add(self.emit, "upnp-error", internal, error)
   def _log(self, msg):
     if self.logfunc:
       self.logfunc(msg)
   def launch_dispatch(self):
-    t = threading.Thread(target=self.dispatch)
-    t.set_daemon(True)
-    t.start()
+    self.thread = threading.Thread(target=self.dispatch)
+    self.thread.daemon  = True
+    self.thread.start()
   def dispatch(self):
     self.running = True
     poll = select.poll()
+    fds = {}
     while self.running:
       while True:
         try:
@@ -82,7 +92,14 @@ class ServerWrangler(gobject.GObject):
           break
         else:
           self.servers.append(a)
-          poll.register(a, select.POLLIN)
+          fd = a.fileno()
+          fds[fd] = a
+          poll.register(fd, select.POLLIN)
       result = poll.poll(self.timeout)
-      if result is not None:
-        result[0].handle_request()
+      for (fd, event) in result:
+        fds[fd].handle_request()
+  def shutdown(self):
+    self.running = False
+    if self.thread is not None:
+      self.thread.join()
+    self.upnp.shutdown()

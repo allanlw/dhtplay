@@ -34,20 +34,20 @@ class DHTRoutingTable(gobject.GObject):
     self.conn = conn
     self.server = server
     r = self.conn.select_one("""SELECT COUNT(*) FROM buckets
-                                WHERE server_id=?""", (self.server.num_id,))
+                                WHERE server_id=?""", (self.server.id_num,))
     if r[0] == 0:
       lower = Hash(0)
       upper = Hash((1 << 160) - 1)
       now = datetime.now()
       self.conn.execute("""INSERT INTO buckets(id, start, end, created, updated,
                            server_id) VALUES(NULL, ?, ?, ?, ?, ?)""",
-                        (lower, upper, now, now, self.server.num_id))
+                        (lower, upper, now, now, self.server.id_num))
     glib.idle_add(self.emit, "changed")
 
   def _add_node(self, hash, contact, bucket, good, time, pending=False,
                 version=None, received=False):
     received = int(received)
-    id = self.conn.insert("""INSERT INTO nodes(id, hash, contact, bucket,
+    id = self.conn.insert("""INSERT INTO nodes(id, hash, contact, bucket_id,
                              good, pending, version, received, created,
                              updated) VALUES (NULL, ?,?,?,?,?,?,?,?,?)""",
                           (hash, contact, bucket, good, pending,
@@ -89,7 +89,7 @@ class DHTRoutingTable(gobject.GObject):
                                updated, server_id) VALUES (NULL, ?, ?, ?, ?,
                                ?)""",
                             (Hash(bmid), bucket_row["end"], now, now,
-                             self.server.num_id))
+                             self.server.id_num))
     oldb = bucket_row["id"]
     glib.idle_add(self.emit, "bucket-split", oldb, newb)
 
@@ -126,7 +126,7 @@ class DHTRoutingTable(gobject.GObject):
                                          WHERE start<=? AND end>? AND
                                          server_id=?
                                          LIMIT 1""",
-                                      (hash,hash, self.server.num_id))
+                                      (hash,hash, self.server.id_num))
     if bucket_row is None:
       raise ValueError("No bucket found???")
 

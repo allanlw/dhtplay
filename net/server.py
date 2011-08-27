@@ -23,12 +23,20 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
   def handle(self):
     """Handle a new DHT packet."""
     enc_message = self.rfile.read()
-    if self.client_address == self.server.updatesocket.getsockname():
-      self.server._update()
-      return
     if not enc_message:
       return
-    message = bdecode(enc_message)[0]
+    error = False
+    try:
+      message = bdecode(enc_message)[0]
+    except BEncodeError:
+      self.send_error(self.client_address, 0,
+                      [203,"Malformed DHT Packet!"])
+      return
+    if (message.has_key("q") and message["q"] == "refresh" and
+        message.has_key("a") and message["a"].has_key("secret") and
+        message["a"]["secret"] in self.server.secrets):
+      self.server._update()
+      return
     c = ContactInfo(*self.client_address)
     self.server._log("From "+str(c)+":"+str(message))  
     if message["y"] == "q":
@@ -92,7 +100,7 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
                                          seed)
       else:
         pass # TODO send error
-    self.send_response(contact.get_tuple(), message["t"], response)
+    self.server.send_response(contact.get_tuple(), message["t"], response)
   def handle_response(self, contact, message):
     """Handle a response packet."""
     try:
@@ -100,7 +108,7 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
     except KeyError:
       version = None
     try:
-      self.server.routingtable.add_node(c,
+      self.server.routingtable.add_node(contact,
                                         Hash(message["r"]["id"]), version, True)
     except KeyError:
       pass
@@ -122,6 +130,7 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
     SocketServer.UDPServer.__init__(self, bind.get_tuple(), DHTRequestHandler)
     self.last_tid = 0
     self.addr = serv
+    self.bind = bind
     self.callbacks = {}
     self.config = config
     self.secrets = [hashlib.sha1(str(random.random())).digest()]
@@ -136,7 +145,7 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
                                       socket.SOCK_DGRAM)
 
     self._log("Server Started.")
-   def next_tid(self):
+  def next_tid(self):
     self.last_tid += 1
     if (self.last_tid > 0xFFFF):
       self.last_tid = 0
@@ -190,7 +199,6 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
       self.logfunc("Error with connection from "+str(client_address))
     traceback.print_exc() # XXX But this goes to stderr!
 
-  def handle_query(self, contact, message):
   def send_ping(self, to):
     self._log("Sending ping to "+str(to))
     result = self.send_query(to, "ping", {"id": self.id.get_20()})
@@ -255,9 +263,8 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
 
   def _send_update(self):
     """Bootstrap an update from the main GUI thread by sending a UDP packet."""
-    msg = bencode({"y":"q", "q":"refresh", "t":"", "a":[]})
-    self.updatesocket.sendto(msg, self.socket.getsockname()) 
-#    self.routingtable.refresh()
+    self.send_query(self.socket.getsockname(), "refresh",
+                    {"secret": self.secrets[0]})
     return True
 
   def _log(self, msg):

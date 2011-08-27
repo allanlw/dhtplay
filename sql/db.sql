@@ -34,8 +34,8 @@ CREATE INDEX IF NOT EXISTS buckets_server_id ON buckets(server_id);
 
 CREATE TABLE IF NOT EXISTS nodes (
   id INTEGER PRIMARY KEY NOT NULL,
-  hash sha1hash UNIQUE NOT NULL,
-  contact contactinfo UNIQUE NOT NULL,
+  hash sha1hash NOT NULL,
+  contact contactinfo NOT NULL,
   bucket_id INTEGER NOT NULL,
   good BOOLEAN NOT NULL,
   pending BOOLEAN NOT NULL,
@@ -46,8 +46,8 @@ CREATE TABLE IF NOT EXISTS nodes (
 
   FOREIGN KEY(bucket_id) REFERENCES buckets(id)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS nodes_hash ON nodes(hash);
-CREATE UNIQUE INDEX IF NOT EXISTS nodes_contact ON nodes(contact);
+CREATE INDEX IF NOT EXISTS nodes_hash ON nodes(hash);
+CREATE INDEX IF NOT EXISTS nodes_contact ON nodes(contact);
 CREATE INDEX IF NOT EXISTS nodes_bucket_id ON nodes(bucket_id);
 
 CREATE TABLE IF NOT EXISTS peers (

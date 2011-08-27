@@ -322,6 +322,29 @@ class PeerView(DBView):
   def _do_peer_changed(self, db, peer):
     self._update_peer_row(db.get_peer_row(peer))
 
+class ServerView(DBView):
+  schema = (str, str, int, gobject.TYPE_PYOBJECT)
+  cols = (
+    ("Hash", 0, 0, True),
+    ("Bind Host", 1, 1),
+    ("Bind Port", 2, 2)
+  )
+  def __init__(self, wrangler=None):
+    signals = {
+      "server-added": self._do_server_added
+    }
+    DBView.__init__(self, self.schema, self.cols, signals)
+    if wrangler is not None:
+      self.bind_to(wrangler)
+  def _hard_update(self):
+    for server in self._db.servers:
+      self._add_server_row(server)
+  def _do_server_added(self, wrangler, server):
+    self._add_server_row(server)
+  def _add_server_row(self, server):
+    self._data.append((server.id.get_hex(), server.bind.host,
+                       server.bind.port, server))
+
 class TorrentPeerView(SetFilterDBView):
   def __init__(self, torrentview, peerview):
     SetFilterDBView.__init__(self, peerview, 0)
