@@ -2,12 +2,8 @@
 
 import gtk
 import glib
-import gobject
-import threading
-import time
 import webbrowser
 
-from net.server import DHTServer
 from net.serverwrangler import ServerWrangler
 from ui import dialogs
 from ui import dbview

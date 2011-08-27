@@ -4,7 +4,6 @@ import time
 import urllib
 
 from net.sha1hash import Hash
-from net.contactinfo import ContactInfo
 
 class BaseDBView(gtk.ScrolledWindow):
   """Base class for convenient database views."""

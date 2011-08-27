@@ -6,9 +6,7 @@ import traceback
 import hashlib
 import random
 
-from net.torrent import TorrentDB
 from net.dht import DHTRoutingTable
-from net.sql import SQLiteThread
 from net.sha1hash import Hash
 from net.contactinfo import ContactInfo
 from net.bencode import *

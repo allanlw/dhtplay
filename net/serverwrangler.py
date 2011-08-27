@@ -3,7 +3,6 @@ import glib
 import select
 import Queue
 import threading
-import hashlib
 import random
 
 from net.server import DHTServer

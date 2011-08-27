@@ -1,5 +1,4 @@
 import gtk
-import glib
 import gobject
 
 class StatusLabel(gtk.Frame):

@@ -3,7 +3,7 @@ import math
 import sqlite3
 import operator
 
-from sha1hash import Hash
+from net.sha1hash import Hash
 
 class BloomFilter:
   K = 2

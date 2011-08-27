@@ -1,1 +1,1 @@
-"""This package contains modules for all of the network and backend components."""
+"""This package contains modules for the network and backend components."""

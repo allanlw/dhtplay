@@ -3,14 +3,11 @@ as a standalone library. (still would be dependent on gobject though)."""
 
 import gobject
 import glib
-import math
-import random
 from datetime import datetime
 
 from net.bencode import *
 from net.sha1hash import Hash
 from net.contactinfo import ContactInfo
-from net.sql import SQLiteThread
 
 MAX_BUCKET_SIZE = 8
 MAX_PENDING_PINGS = 2

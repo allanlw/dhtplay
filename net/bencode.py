@@ -23,7 +23,12 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
-
+#
+# Changelog:
+# 0.3.1: Minor code cleanup.
+# 0.3: Added support for encoding bools as integers.
+# 0.2: Added support for type factories and added documentation.
+# 0.1: Initial release.
 """FreeBencode: A simple and free python bencode/bdecode library."""
 
 str_factory = str
@@ -79,9 +84,10 @@ def bencode_dict(obj):
   except AttributeError:
     raise BencodeError("Could not bencode object: no keys method.")
   keys.sort()
-  return "d{0:s}e".format("".join((bencode_str(k)+bencode(obj[k]) for k in keys)))
+  return "d{0:s}e".format("".join(
+                              (bencode_str(k)+bencode(obj[k]) for k in keys)))
 
-def bdecode(s):
+def bdecode(string):
   """Bdecode a string and return the result and any leftover data.
 
   The return value is a tuple containing a native python representation of the
@@ -89,21 +95,21 @@ def bdecode(s):
   the end. See the functions bdecode_str, bdecode_int, bdecode_list and
   bdecode_dict for information on customizing the types used during
   decoding."""
-  if len(s) == 0:
+  if len(string) == 0:
     raise BencodeError("Invalid bencoded object: empty.")
-  c = s[0]
-  if c == 'i':
-    return bdecode_int(s)
-  elif c == 'l':
-    return bdecode_list(s)
-  elif c == 'd':
-    return bdecode_dict(s)
-  elif c.isdigit():
-    return bdecode_str(s)
+  char = string[0]
+  if char == 'i':
+    return bdecode_int(string)
+  elif char == 'l':
+    return bdecode_list(string)
+  elif char == 'd':
+    return bdecode_dict(string)
+  elif char.isdigit():
+    return bdecode_str(string)
   else:
-     raise BencodeError("Invalid bencoded object: no type indicator.")
+    raise BencodeError("Invalid bencoded object: no type indicator.")
 
-def bdecode_int(s, factory=None):
+def bdecode_int(string, factory=None):
   """Bdecode an integer and return the result and any leftovers.
 
   The optional factory param is used as a function that takes a string
@@ -113,14 +119,14 @@ def bdecode_int(s, factory=None):
   int_factory."""
   if factory is None:
     factory = int_factory
-  if len(s) <= 2 or  s[0] != 'i':
+  if len(string) <= 2 or string[0] != 'i':
     raise BencodeError("Invalid bencoded int: string does not start with i.")
-  parts = s.partition("e")
+  parts = string.partition("e")
   if not parts[2]:
     raise BencodeError("Invalid bencoded int: string does not terminate.")
   return factory(parts[0][1:]), parts[2]
 
-def bdecode_str(s, factory=None):
+def bdecode_str(string, factory=None):
   """Bdecode a string and return the result and any leftovers.
 
   The option factory param is used as a function that takes a string
@@ -130,20 +136,20 @@ def bdecode_str(s, factory=None):
   str_factory."""
   if factory is None:
     factory = str_factory
-  parts = s.partition(":")
+  parts = string.partition(":")
   if not parts[2]:
     raise BencodeError("Invalid bencoded string: string does not contain ':'.")
   try:
-    l = int(parts[0])
+    length = int(parts[0])
   except ValueError:
     raise BencodeError("Invalid bencoded string: string length not an integer.")
-  if l < 0:
+  if length < 0:
     raise BencodeError("Invalid bencoded string: negative length.")
-  elif len(parts[2]) < l :
+  elif len(parts[2]) < length :
     raise BencodeError("Invalid bencoded string: Too long length.")
-  return factory(parts[2][0:l]), parts[2][l:]
+  return factory(parts[2][0:length]), parts[2][length:]
 
-def bdecode_list(s, factory=None):
+def bdecode_list(string, factory=None):
   """Bdecode a list and return the result and any leftovers.
 
   The option factory param is used as a function that takes a list and
@@ -152,9 +158,9 @@ def bdecode_list(s, factory=None):
   function is taken from the module variable list_factory."""
   if factory is None:
     factory = list_factory
-  if s[0] != 'l':
+  if string[0] != 'l':
     raise BencodeError("Invalid bencoded list: string does not start with 'l'.")
-  leftovers = s[1:]
+  leftovers = string[1:]
   result = []
   while leftovers and leftovers[0] != 'e':
     res = bdecode(leftovers)
@@ -164,7 +170,7 @@ def bdecode_list(s, factory=None):
     raise BencodeError("Invalid bencoded list: did not terminate with 'e'.")
   return factory(result), leftovers[1:]
 
-def bdecode_dict(s, factory=None):
+def bdecode_dict(string, factory=None):
   """Bdecode a dict and return the result and any leftover data.
 
   The optional factory param is used to create the dictionary from a
@@ -173,13 +179,13 @@ def bdecode_dict(s, factory=None):
   dict_factory module variable."""
   if factory is None:
     factory = dict_factory
-  if s[0] != 'd':
+  if string[0] != 'd':
     raise BencodeError("Invalid bencoded dict: string does not start with 'd'.")
   try:
-    items, leftovers = bdecode_list('l'+s[1:])
-  except BencodeError as e:
+    items, leftovers = bdecode_list('l'+string[1:])
+  except BencodeError as err:
     raise BencodeError(
-            "Error while decoding dict items as list:\"{0}\"".format(e))
+            "Error while decoding dict items as list:\"{0}\"".format(err))
   result = {}
   if len(items)%2 != 0:
     raise BencodeError("Invalid bencoded dict: odd number of items.")

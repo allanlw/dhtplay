@@ -1,10 +1,7 @@
-import sqlite3
 import gobject
 import glib
 from datetime import datetime
 
-from net.sha1hash import Hash
-from net.contactinfo import ContactInfo
 from net.bloom import BloomFilter
 
 class TorrentDB(gobject.GObject):

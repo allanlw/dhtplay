@@ -1,7 +1,9 @@
+"""contains a class for representing internet address + port combinations."""
 import socket
 import sqlite3
 
 class ContactInfo:
+  """Represents an internet address + port combination."""
   def __init__(self, host, port=None):
     if isinstance(host, ContactInfo):
       self.host = host.host
@@ -24,12 +26,15 @@ class ContactInfo:
     if isinstance(self.port, basestring):
       self.port = (ord(self.port[0]) << 8) + ord(self.port[1])
   def get_tuple(self):
+    """Returns a tuple of (host, port) (e.g. for raw socket communication)"""
     return self.host, self.port
   def get_packed(self):
+    """Returns a BEP_0005 'packed' representation of the host+port."""
     result = self.get_packed_host()
     result += chr(self.port >> 8) + chr(self.port % 256)
     return buffer(result)
   def get_packed_host(self):
+    """Returns a BEP_0005 'packed' representation of the host."""
     try:
       result = socket.inet_pton(socket.AF_INET, self.host)
     except (ValueError, socket.error):
