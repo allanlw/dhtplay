@@ -1,4 +1,4 @@
-# FreeBencode v0.3
+# FreeBencode v0.3.1
 # 
 # This is a simple bencode/bdecode python module that I wrote because
 # I wasn't happy with the license of the official bittorrent one.
