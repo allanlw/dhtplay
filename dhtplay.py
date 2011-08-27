@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import gtk
+import random
 
 from ui.interface import Interface
 import defaults
@@ -8,6 +9,8 @@ import defaults
 settings = "settings.cfg"
 
 def start():
+  random.seed()
+
   gtk.gdk.threads_init()
   config = defaults.default_config
   config.read(settings)

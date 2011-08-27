@@ -25,6 +25,12 @@ get_peers_host =
 get_peers_port = 6881
 get_peers_hash =
 get_peers_scrape = False
+multiple_servers_bind_addr = 0.0.0.0
+multiple_servers_serv_addr = 0.0.0.0
+multiple_servers_min_port = 6881
+multiple_servers_max_port = 6890
+multiple_servers_uniform = False
+multiple_servers_upnp = False
 """
 
 default_config = ConfigParser.RawConfigParser()

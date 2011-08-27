@@ -28,7 +28,7 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
     error = False
     try:
       message = bdecode(enc_message)[0]
-    except BEncodeError:
+    except BencodeError:
       self.send_error(self.client_address, 0,
                       [203,"Malformed DHT Packet!"])
       return

@@ -41,6 +41,12 @@ class Interface(gtk.Window):
                                    gtk.STOCK_NEW)
     add_server_action.connect("activate", self.add_server)
 
+    add_multiple_servers_action = gtk.Action("add_multiple_servers",
+                                             "Create Multiple Servers",
+                                             "Create Multiple DHT Servers.",
+                                             gtk.STOCK_NEW)
+    add_multiple_servers_action.connect("activate", self.add_multiple_servers)
+
     quit_action = gtk.Action("quit", "Quit",
                              "Quit", gtk.STOCK_QUIT)
     quit_action.connect("activate", self.quit)
@@ -78,6 +84,7 @@ class Interface(gtk.Window):
     file_menuitem.set_submenu(file_menu)
 
     file_menu.add(add_server_action.create_menu_item())
+    file_menu.add(add_multiple_servers_action.create_menu_item())
     file_menu.add(gtk.SeparatorMenuItem())
     file_menu.add(quit_action.create_menu_item())
 
@@ -98,6 +105,7 @@ class Interface(gtk.Window):
     vbox.pack_start(toolbar, False, False)
 
     toolbar.add(add_server_action.create_tool_item())
+    toolbar.add(add_multiple_servers_action.create_tool_item())
 
     # Work area
 
@@ -237,8 +245,30 @@ class Interface(gtk.Window):
 
       self.serverwrangler.add_server(hash, bind, serv, use_upnp)
 
+  def add_multiple_servers(self, widget=None):
+    dialog = dialogs.MultipleServersDialog(self, self.cfg)
+    response = dialog.run()
+    dialog.destroy()
+    if response is not None:
+      bind, min_port, max_port, uniform, upnp, host = response
+
+      self.cfg.set("last", "multiple_servers_bind_addr", bind)
+      self.cfg.set("last", "multiple_servers_serv_addr", host)
+      self.cfg.set("last", "multiple_servers_min_port", str(min_port))
+      self.cfg.set("last", "multiple_servers_max_port", str(max_port))
+      self.cfg.set("last", "multiple_servers_uniform", str(uniform))
+      self.cfg.set("last", "multiple_servers_upnp", str(upnp))
+
+      if not upnp:
+        host = None
+
+      self.serverwrangler.add_servers(bind, host, min_port, max_port, 
+                                      upnp, uniform)
   def _do_upnp_error(self, manager, bind, error):
-    glib.idle_add(self.error, "UPnP Error when adding server: {0}".formaT(error))
+    # why do I need to grab the lock here?
+    with gtk.gdk.lock:
+      self.error("Upnp Error when adding server: {0}".format(error))
+
 
   def ping_node(self, widget=None, host=None, port=None):
     if not self.current_server:

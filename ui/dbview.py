@@ -79,7 +79,10 @@ class DBView(BaseDBView):
     BaseDBView.__init__(self, schema, cols)
     self._signals = signals
     self._handles = []
+    self._db = None
   def bind_to(self, ob):
+    if self._db is not None:
+      self.unbind()
     self._db = ob
     for signal,func in self._signals.iteritems():
       self._do_bind(ob, signal, func)

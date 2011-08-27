@@ -3,12 +3,16 @@ import glib
 import select
 import Queue
 import threading
+import hashlib
+import random
 
 from net.server import DHTServer
 from net.sql import SQLiteThread
 from net.torrent import TorrentDB
 from net.upnp import UPNPManager
 from net.contactinfo import ContactInfo
+from net.sha1hash import Hash
+
 
 class ServerWrangler(gobject.GObject):
   incoming = gobject.property(type=bool, default=False)
@@ -59,6 +63,19 @@ class ServerWrangler(gobject.GObject):
         server_id = self.conn.select_one("""SELECT id FROM servers WHERE
                                             hash=?""", (hash,))["id"]
       self._do_add_server(hash, bind, host, server_id)
+  def add_servers(self, bind_addr, host_addr, min_port, max_port, upnp,
+                  uniform):
+    """Generates servers on ports from min_port to max_port inclusive."""
+    hashes = []
+    if uniform:
+      hashes = range(0x0, (1 << 160)-1, ((1 << 160)-1)/(max_port-min_port+1))
+    else:
+      for i in range(min_port, max_port+1):
+        hashes.append(random.getrandbits(160))
+    hashes = [Hash(h) for h in hashes]
+    for i, port in enumerate(range(min_port, max_port+1)):
+      self.add_server(hashes[i], ContactInfo(bind_addr, port),
+                      ContactInfo(host_addr, port), upnp)
   def _do_add_server(self, hash, bind, host, id):
     new_server = DHTServer(self.config, id, hash, bind, host,
                            self.conn, self.torrents, self._log)

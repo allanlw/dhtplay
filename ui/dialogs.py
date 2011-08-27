@@ -139,3 +139,80 @@ class GetPeersDialog(HostDialog):
     else:
       result = None
     return result
+
+class MultipleServersDialog(gtk.Dialog):
+  def __init__(self, parent, config):
+    gtk.Dialog.__init__(self, "Create Multiple Servers...", parent,
+        gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+        (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+         gtk.STOCK_OK, gtk.RESPONSE_OK))
+
+    self.table = gtk.Table(6, 2)
+    self.vbox.pack_start(self.table, True, True)
+
+    self.host_label = gtk.Label("Bind Address:")
+    self.table.attach(self.host_label, 0, 1, 0, 1, 0)
+
+    self.host_entry = gtk.Entry()
+    self.host_entry.set_text(config.get("last", "multiple_servers_bind_addr"))
+    self.table.attach(self.host_entry, 1, 2, 0, 1)
+
+    self.min_port_label = gtk.Label("Min Port:")
+    self.table.attach(self.min_port_label, 0, 1, 1, 2, 0)
+
+    self.min_port_entry = gtk.Entry(6)
+    self.min_port_entry.set_text(config.get("last", "multiple_servers_min_port"))
+    self.table.attach(self.min_port_entry, 1, 2, 1, 2)
+
+    self.max_port_label = gtk.Label("Max Port:")
+    self.table.attach(self.max_port_label, 0, 1, 2, 3, 0)
+
+    self.max_port_entry = gtk.Entry(6)
+    self.max_port_entry.set_text(config.get("last", "multiple_servers_max_port"))
+    self.table.attach(self.max_port_entry, 1, 2, 2, 3)
+
+    self.uniform_label = gtk.Label("Uniform:")
+    self.table.attach(self.uniform_label, 0, 1, 3, 4)
+
+    self.uniform_check = gtk.CheckButton()
+    self.uniform_check.set_active(config.getboolean("last",
+                                                    "multiple_servers_uniform"))
+    self.table.attach(self.uniform_check, 1, 2, 3, 4)
+
+    self.upnp_label = gtk.Label("UPnP (IGD):")
+    self.table.attach(self.upnp_label, 0, 1, 4, 5)
+
+    self.upnp_check = gtk.CheckButton()
+    self.upnp_check.set_active(config.getboolean("last",
+                                                 "multiple_servers_upnp"))
+    self.upnp_check.connect("toggled", self._update_host)
+    self.table.attach(self.upnp_check, 1, 2, 4, 5)
+
+    self.serv_label = gtk.Label("Host Address:")
+    self.table.attach(self.serv_label, 0, 1, 5, 6)
+
+    self.serv_entry = gtk.Entry()
+    self.serv_entry.set_text(config.get("last", "multiple_servers_serv_addr"))
+    self.table.attach(self.serv_entry, 1, 2, 5, 6)
+
+    self._update_host()
+    self.vbox.show_all()
+
+  def _update_host(self, button=None):
+    self.serv_label.set_sensitive(not self.upnp_check.get_active())
+    self.serv_entry.set_sensitive(not self.upnp_check.get_active())
+
+  def run(self):
+    response = gtk.Dialog.run(self)
+
+    if response == gtk.RESPONSE_OK:
+      result = (self.host_entry.get_text(),
+                int(self.min_port_entry.get_text()),
+                int(self.max_port_entry.get_text()),
+                self.uniform_check.get_active(),
+                self.upnp_check.get_active(),
+                self.serv_entry.get_text())
+    else:
+      result = None
+    return result
+
