@@ -26,7 +26,7 @@ class UPNPManager(gobject.GObject):
     self.igd.connect("mapped-external-port", self._do_mapped_external_port)
     self.igd.connect("error-mapping-port", self._do_error_mapping_port)
   def add_udp_port(self, target):
-    self.igd.add_port("UDP", target.port, target.host, target.port,
+    glib.idle_add(self.igd.add_port, "UDP", target.port, target.host, target.port,
                       self.lease_duration, self.lease_description)
   def _do_mapped_external_port(self, igd, proto, external_ip,
                                replaces_external_ip, external_port, local_ip,
@@ -59,4 +59,4 @@ class UPNPManager(gobject.GObject):
     glib.idle_add(self.emit, "add-port-error",
                   ContactInfo(local_ip, local_port), e)
   def shutdown(self):
-    self.igd.delete_all_mappings()
+    glib.idle_add(self.igd.delete_all_mappings)

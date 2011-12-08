@@ -1,0 +1,5 @@
+Threads:
+  1 Main Thread (ui)
+  1 SQLite Thread (holds sqlite cursor and connection)
+  1 Server Wrangler thread (polls file descriptors)
+  x DHT Server threads (one for each server)

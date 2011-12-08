@@ -1,3 +1,4 @@
+"""This module contains the bloom filter implementation."""
 import hashlib
 import math
 import sqlite3
@@ -6,6 +7,7 @@ import operator
 from net.sha1hash import Hash
 
 class BloomFilter:
+  """Bloom filter implemented to BEP_0033 spec."""
   K = 2
   M = 256 * 8
   def __init__(self, filter1=None, filter2=None):

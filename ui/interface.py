@@ -265,7 +265,6 @@ class Interface(gtk.Window):
     with gtk.gdk.lock:
       self.error("Upnp Error when adding server: {0}".format(error))
 
-
   def ping_node(self, widget=None, host=None, port=None):
     if not self.current_server:
       self.error("Can't ping node: no server selected.")
@@ -466,6 +465,7 @@ class Interface(gtk.Window):
     treeview.goto_parent()
 
   def error(self, message):
+    print message
     dialog = gtk.MessageDialog(self,
                                gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
                                gtk.MESSAGE_ERROR,

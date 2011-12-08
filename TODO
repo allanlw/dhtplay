@@ -12,5 +12,5 @@ TODO:
 * Add sending errors for malformed DHT packets. (esp. invalid tokens)
 * Re-examine how the refresh bootstrapping works - Does it need to be a bencoded packet?
 * should the functions like _handle_ping_response be in the DHTHandler class? - I think so.
-* Should the images module export a dict instead of regular variables.
+* Should the images module export a dict instead of regular variables?
 * Should I split the bucket-node relationship into a seperate table? Would decrease duplication in nodes table.

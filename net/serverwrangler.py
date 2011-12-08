@@ -93,7 +93,7 @@ class ServerWrangler(gobject.GObject):
     if self.logfunc:
       self.logfunc(msg)
   def launch_dispatch(self):
-    self.thread = threading.Thread(target=self.dispatch)
+    self.thread = threading.Thread(target=self.dispatch, name="Wrangler")
     self.thread.daemon  = True
     self.thread.start()
   def dispatch(self):

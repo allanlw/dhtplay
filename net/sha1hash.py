@@ -26,10 +26,10 @@ class Hash:
     """Returns a 40 character lowercase hex representation of the hash."""
     return "{0:040x}".format(self.id)
   def get_20(self):
-    """Returns a 20 character 'packed' representation of the hash."""
+    """Returns a 20 character 'packed' binary representation of the hash."""
     raw_hash = self.id
     result = ""
-    while id != 0:
+    while raw_hash != 0:
       result = chr(raw_hash & 0xFF) + result
       raw_hash = raw_hash >> 8
     while len(result) < 20:

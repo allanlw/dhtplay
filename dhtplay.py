@@ -5,7 +5,6 @@ import gtk
 
 from ui.interface import Interface
 import defaults
-import random
 
 settings = "settings.cfg"
 
