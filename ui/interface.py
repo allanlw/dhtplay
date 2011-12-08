@@ -465,7 +465,6 @@ class Interface(gtk.Window):
     treeview.goto_parent()
 
   def error(self, message):
-    print message
     dialog = gtk.MessageDialog(self,
                                gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT,
                                gtk.MESSAGE_ERROR,
