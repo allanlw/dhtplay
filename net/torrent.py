@@ -3,6 +3,7 @@ import glib
 from datetime import datetime
 
 from net.bloom import BloomFilter
+from sql import queries
 
 class TorrentDB(gobject.GObject):
   __gsignals__ = {
@@ -34,25 +35,19 @@ class TorrentDB(gobject.GObject):
 
   def add_torrent(self, peer, torrent, seed=False):
     now = datetime.now()
-    c = self.conn
 
-    peer_row = c.select_one("SELECT * FROM peers WHERE contact=? LIMIT 1",
-                            (peer,))
+    peer_row = queries.get_peer_by_contact(self.conn, peer)
     if not peer_row:
-      c.execute("INSERT INTO peers VALUES (NULL, ?, ?, ?)",
-                (peer, now, now))
+      queries.add_peer(self.conn, peer, now)
       signal = "peer-added"
     else:
-      c.execute("UPDATE peers SET updated=? WHERE id=?",
-                (now, peer_row["id"]))
+      queries.set_peer_updated(self.conn, peer_row["id"], now)
       signal = "peer-changed"
 
-    peer_row = c.select_one("SELECT * FROM peers WHERE contact=? LIMIT 1",
-                            (peer, ))
+    peer_row = queries.get_peer_by_contact(self.conn, peer)
     glib.idle_add(self.emit, signal, peer)
 
-    torrent_row = c.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
-                               (torrent, ))
+    torrent_row = queries.get_torrent_by_hash(self.conn, torrent)
     if torrent_row is None:
       seed_bloom = BloomFilter()
       peer_bloom = BloomFilter()
@@ -60,8 +55,7 @@ class TorrentDB(gobject.GObject):
         seed_bloom.insert_host(peer)
       else:
         peer_bloom.insert_host(peer)
-      c.execute("INSERT INTO torrents VALUES (NULL, ?, ?, ?, ?, ?)",
-                (torrent, now, now, seed_bloom, peer_bloom))
+      queries.add_torrent(self.conn, torrent, now, seed_bloom, peer_bloom)
       signal = "torrent-added"
     else:
       seed_bloom = torrent_row["seeds"]
@@ -70,73 +64,61 @@ class TorrentDB(gobject.GObject):
         seed_bloom.insert_host(peer)
       else:
         peer_bloom.insert_host(peer)
-      c.execute("UPDATE torrents SET updated=?,seeds=?,peers=? WHERE id=?",
-                (now, torrent_row["id"], seed_bloom, peer_bloom))
+      queries.set_torrent_filters(self.conn, torrent_row["id"], now,
+                                  seed_bloom, peer_bloom)
       signal = "torrent-changed"
 
-    torrent_row = c.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
-                               (torrent,))
+    torrent_row = queries.get_torrent_by_hash(self.conn, torrent)
     glib.idle_add(self.emit, signal, torrent)
 
-    peer_torrent_row = c.select_one("""SELECT * FROM peer_torrents
-                                       WHERE peer_id=? AND torrent_id=?
-                                       LIMIT 1""",
-                                    (peer_row["id"], torrent_row["id"]))
+    peer_torrent_row = queries.get_peer_torrent_by_peer_and_torrent(self.conn,
+                                                 peer_row["id"],
+                                                 torrent_row["id"])
     if peer_torrent_row is None:
-      c.execute("INSERT INTO peer_torrents VALUES (NULL, ?, ?, ?, ?, ?)",
-                (peer_row["id"], torrent_row["id"], seed, now, now))
+      queires.add_peer_torrent(self.conn, peer_row["id"], torrent_row["id"],
+                               seed, now)
       signal = "peer-torrent-added"
     else:
-      c.execute("UPDATE peer_torrents SET updated=? WHERE id=?",
-                (now, peer_torrent_row["id"]))
+      queries.set_peer_torrent_updated(conn, peer_torrent_row["id"], now)
       signal = "peer-torrent-updated"
 
-    peer_torrent_row = c.select_one("""SELECT * FROM peer_torrents
-                                       WHERE peer_id=? AND torrent_id=?
-                                       LIMIT 1""",
-                                    (peer_row["id"], torrent_row["id"]))
+    peer_torrent_row = queries.get_peer_torrent_by_peer_and_torrent(self.conn,
+                                                 peer_row["id"],
+                                                 torrent_row["id"])
     glib.idle_add(self.emit, signal, peer, torrent)
 
   def close(self):
     pass
 
   def get_torrent_row(self, hash):
-    return self.conn.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
-                                (hash,))
+    return queries.get_torrent_by_hash(self.conn, hash)
   def get_peer_row(self, contact):
-    return self.conn.select_one("SELECT * FROM peers WHERE contact=? LIMIT 1",
-                                (contact,))
+    return queries.get_peer_by_contact(self.conn, contact)
   def get_peer_by_id(self, id):
-    return self.conn.select_one("SELECT * FROM peers WHERE id=? LIMIT 1",
-                                (id,))
+    return queries.get_peer(self.conn, id)
   def get_torrent_rows(self):
-    return self.conn.select("SELECT * FROM torrents")
+    return queries.get_all_torrents(self.conn)
   def get_peer_rows(self):
-    return self.conn.select("SELECT * FROM peers")
+    return queries.get_all_peers(self.conn)
   def get_torrent_peers(self, id, noseed = False):
     if noseed:
-      return self.conn.select("""SELECT peer_id FROM peer_torrents
-                                 WHERE torrent_id=? AND
-                                 NOT seed""", (id,))
+      return queries.get_torrent_peers_noseed(self.conn, id)
     else:
-      return self.conn.select("""SELECT peer_id FROM peer_torrents
-                                 WHERE torrent_id=?""", (id,))
+      return queries.get_torrent_peers(self.conn, id)
   def get_peer_torrents(self, id):
-    return self.conn.select("""SELECT torrent_id FROM peer_torrents
-                               WHERE peer_id=?""", (id,))
+    return queries.get_peer_torrents(self.conn, id)
   def add_filter(self, filter, hash, seed):
     now = datetime.now()
     if seed:
       key = "seeds"
     else:
       key = "peers"
-    row = self.get_torrent_row(hash)
+    row = dict(self.get_torrent_row(hash))
     if row is None:
       return
-    new = row[key] | filter
+    row[key] = row[key] | filter
 
-    self.conn.execute("UPDATE torrents SET updated=?, {0}=? WHERE id=?".format(key),
-              (now, new, row["id"]))
+    queries.set_torrent_filers(row["id"], now, row["seeds"], row["peers"])
     glib.idle_add(self.emit, "torrent-changed", hash)
   def get_magnet(self, hash):
     return "magnet:?urn:btih:{0}".format(hash.get_hex())

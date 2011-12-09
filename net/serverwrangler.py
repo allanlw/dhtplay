@@ -6,12 +6,13 @@ import threading
 import random
 
 from net.server import DHTServer
-from net.sql import SQLiteThread
 from net.torrent import TorrentDB
 from net.upnp import UPNPManager
 from net.contactinfo import ContactInfo
 from net.sha1hash import Hash
-
+from sql.thread import SQLiteThread
+from sql.db import CREATE_DB_SCRIPT
+from sql import queries
 
 class ServerWrangler(gobject.GObject):
   incoming = gobject.property(type=bool, default=False)
@@ -38,29 +39,24 @@ class ServerWrangler(gobject.GObject):
 
     self.conn = SQLiteThread(self.config.get("torrent", "db"))
     self.conn.start()
-    self.conn.executescript(open("sql/db.sql","r").read())
+    self.conn.executescript(CREATE_DB_SCRIPT)
 
     self.torrents = TorrentDB(self.conn, self._log)
 
-    servers = self.conn.select("SELECT * FROM servers")
+    servers = queries.get_servers(self.conn)
     for server in servers:
       self.add_server(server["hash"], server["bind"], server["host"],
                       server["upnp"], False)
   def add_server(self, hash, bind, host, upnp, insert=True):
     if upnp:
       if insert:
-        self.conn.execute("""INSERT INTO servers(hash, bind, host, upnp)
-                             VALUES (?, ?, ?, ?)""",
-                          (hash, bind, None, True))
+        queries.add_server(self.conn, hash, bind, None, True)
       self.upnp.add_udp_port(bind)
     else:
       if insert:
-        server_id = self.conn.insert("""INSERT INTO servers(hash, bind, host,
-                                        upnp) VALUES (?, ?, ?, ?)""",
-                                   (hash, bind, host, False))
+        server_id = queries.add_server(self.conn, hash, bind, host, False)
       else:
-        server_id = self.conn.select_one("""SELECT id FROM servers WHERE
-                                            hash=?""", (hash,))["id"]
+        server_id = queries.get_server_by_hash(self.conn, hash)["id"]
       self._do_add_server(hash, bind, host, server_id)
   def add_servers(self, bind_addr, host_addr, min_port, max_port, upnp,
                   uniform):
@@ -84,8 +80,7 @@ class ServerWrangler(gobject.GObject):
   def _do_notified(self, server, value):
     self.incoming = (value or self.incoming)
   def _port_added(self, manager, external, internal):
-    row = self.conn.select_one("SELECT * FROM servers WHERE bind=?",
-                               (internal,))
+    row = queries.get_server_by_bind(self.conn, internal)
     self._do_add_server(row["hash"], internal, external, row["id"])
   def _add_port_error(self, manager, internal, error):
     glib.idle_add(self.emit, "upnp-error", internal, error)

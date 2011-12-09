@@ -53,8 +53,8 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
     except KeyError:
       version = None
     try:
-      self.server.routingtable.add_node(contact,
-                                        Hash(message["a"]["id"]), version, True)
+      self.server.routingtable.add_node(contact, Hash(message["a"]["id"]),
+                                        version, True)
     except KeyError:
       pass
 
@@ -63,16 +63,19 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
       pass
     elif message["q"] == "find_node":
       nodes = ""
-      for row in self.server.routingtable.get_closest(Hash(message["a"]["target"])):
+      for row in self.server.routingtable.get_closest(Hash(message["a"]
+                                                      ["target"])):
         nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
       response["nodes"] = nodes
     elif message["q"] == "get_peers":
       nodes = ""
-      for row in self.server.routingtable.get_closest(Hash(message["a"]["info_hash"])):
+      for row in self.server.routingtable.get_closest(Hash(message["a"]
+                                                      ["info_hash"])):
         nodes += str(row["hash"].get_20()) + str(row["contact"].get_packed())
       response["nodes"] = nodes
 
-      trow = self.server.torrents.get_torrent_row(Hash(message["a"]["info_hash"]))
+      trow = self.server.torrents.get_torrent_row(Hash(message["a"]
+                                                  ["info_hash"]))
       if trow is not None:
         values = []
         ids = self.server.torrents.get_torrent_peers(trow["id"],
@@ -147,7 +150,7 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
     self.last_tid += 1
     if (self.last_tid > 0xFFFF):
       self.last_tid = 0
-    return chr((self.last_tid & 0xFF00) >> 8)+chr(self.last_tid & 0x00FF)
+    return chr((self.last_tid & 0xFF00) >> 8) + chr(self.last_tid & 0x00FF)
 
   def send_query(self, to, name, args):
     query = {"y":"q", "t":self.next_tid(), "q":name, "a":args,
@@ -236,7 +239,8 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
       self.torrents.add_filter(BloomFilter(message["r"]["BFsp"]), hash, True)
     if message["r"].has_key("BFpe"):
       self.torrents.add_filter(BloomFilter(message["r"]["BFpe"]), hash, False)
-    self.routingtable._handle_get_peers_response(Hash(message["r"]["id"]), message)
+    self.routingtable._handle_get_peers_response(Hash(message["r"]["id"]),
+                                                 message)
 
   def load_torrent(self, filename):
     f = open(filename, "r")

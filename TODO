@@ -13,4 +13,4 @@ TODO:
 * should the functions like _handle_ping_response be in the DHTHandler class? - I think so.
 * Should the images module export a dict instead of regular variables?
 * Should I split the bucket-node relationship into a seperate table? Would decrease duplication in nodes table. (I think this is silly)
-* The program should really have a routine for auto filling the tables.
+* The program should really have a routine for auto filling the buckets.

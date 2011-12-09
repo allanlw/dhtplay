@@ -3,7 +3,7 @@
 import ConfigParser
 import io
 
-defaults = """ 
+DEFAULTS = """ 
 [torrent]
 db = :memory:
 
@@ -33,5 +33,5 @@ multiple_servers_uniform = False
 multiple_servers_upnp = False
 """
 
-default_config = ConfigParser.RawConfigParser()
-default_config.readfp(io.BytesIO(defaults))
+DEFAULT_CONFIG = ConfigParser.RawConfigParser()
+DEFAULT_CONFIG.readfp(io.BytesIO(DEFAULTS))

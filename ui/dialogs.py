@@ -120,7 +120,7 @@ class GetPeersDialog(HostDialog):
 
     self.table.resize(4, 2)
 
-    scrape_label = gtk.Label("Scarpe:")
+    scrape_label = gtk.Label("Scrape:")
     self.table.attach(scrape_label, 0, 1, 3, 4, 0)
 
     self.scrape_check = gtk.CheckButton()

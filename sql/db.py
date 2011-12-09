@@ -1,3 +1,6 @@
+"""Contains SQL code for database creation."""
+
+CREATE_DB_SCRIPT = """
 /* This SQL script for SQLite generates the tables for DHTPlay.
  * It depends upon custom types that are registered by the python connection.
  * The types are as follows:
@@ -81,3 +84,4 @@ CREATE TABLE IF NOT EXISTS peer_torrents (
 );
 CREATE INDEX IF NOT EXISTS peer_torrents_peer_id ON peer_torrents(peer_id);
 CREATE INDEX IF NOT EXISTS peer_torrents_torrent_id ON peer_torrents(torrent_id);
+"""
