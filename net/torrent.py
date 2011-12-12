@@ -47,24 +47,19 @@ class TorrentDB(gobject.GObject):
     peer_row = queries.get_peer_by_contact(self.conn, peer)
     glib.idle_add(self.emit, signal, peer)
 
+    seed_bloom = BloomFilter()
+    peer_bloom = BloomFilter()
+    if seed:
+      seed_bloom.insert_host(peer)
+    else:
+      peer_bloom.insert_host(peer)
+
     torrent_row = queries.get_torrent_by_hash(self.conn, torrent)
     if torrent_row is None:
-      seed_bloom = BloomFilter()
-      peer_bloom = BloomFilter()
-      if seed:
-        seed_bloom.insert_host(peer)
-      else:
-        peer_bloom.insert_host(peer)
       queries.add_torrent(self.conn, torrent, now, seed_bloom, peer_bloom)
       signal = "torrent-added"
     else:
-      seed_bloom = torrent_row["seeds"]
-      peer_bloom = torrent_row["peers"]
-      if seed:
-        seed_bloom.insert_host(peer)
-      else:
-        peer_bloom.insert_host(peer)
-      queries.set_torrent_filters(self.conn, torrent_row["id"], now,
+      queries.add_torrent_filters(self.conn, torrent_row["id"], now,
                                   seed_bloom, peer_bloom)
       signal = "torrent-changed"
 
@@ -75,7 +70,7 @@ class TorrentDB(gobject.GObject):
                                                  peer_row["id"],
                                                  torrent_row["id"])
     if peer_torrent_row is None:
-      queires.add_peer_torrent(self.conn, peer_row["id"], torrent_row["id"],
+      queries.add_peer_torrent(self.conn, peer_row["id"], torrent_row["id"],
                                seed, now)
       signal = "peer-torrent-added"
     else:
@@ -109,16 +104,15 @@ class TorrentDB(gobject.GObject):
     return queries.get_peer_torrents(self.conn, id)
   def add_filter(self, filter, hash, seed):
     now = datetime.now()
-    if seed:
-      key = "seeds"
-    else:
-      key = "peers"
-    row = dict(self.get_torrent_row(hash))
+    row = self.get_torrent_row(hash)
     if row is None:
       return
-    row[key] = row[key] | filter
 
-    queries.set_torrent_filers(row["id"], now, row["seeds"], row["peers"])
+    if seed:
+      queries.add_torrent_filters(row["id"], now, filter, 0)
+    else:
+      queries.add_torrent_filters(row["id"], now, 0, fileter)
+
     glib.idle_add(self.emit, "torrent-changed", hash)
   def get_magnet(self, hash):
     return "magnet:?urn:btih:{0}".format(hash.get_hex())

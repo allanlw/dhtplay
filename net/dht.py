@@ -54,7 +54,7 @@ class DHTRoutingTable(gobject.GObject):
     glib.idle_add(self.emit, "node-removed", hash)
 
   def _cull_bucket(self, now, bucket):
-    queries.get_non_pending_nodes_in_bucket(self.conn, bucket)
+    rows = queries.get_non_pending_nodes_in_bucket(self.conn, bucket)
     if len(rows) < MAX_BUCKET_SIZE:
       return True
     culled = False
@@ -71,7 +71,7 @@ class DHTRoutingTable(gobject.GObject):
   def _split_bucket(self, now, bucket_row, bstart, bend):
     bmid = bstart + (bend - bstart)/2
     queries.set_bucket_end(self.conn, bucket_row["id"], Hash(bmid), now)
-    newb = queries.create_bucket(Hash(bmid), bucket_row["end"], now,
+    newb = queries.create_bucket(self.conn, Hash(bmid), bucket_row["end"], now,
                                  self.server.id_num)
     oldb = bucket_row["id"]
     glib.idle_add(self.emit, "bucket-split", oldb, newb)
@@ -80,7 +80,7 @@ class DHTRoutingTable(gobject.GObject):
     for row in rows:
       h = row[1]
       if h.get_int() >= bmid:
-        queries.set_node_bucket(row["id"], newb)
+        queries.set_node_bucket(self.conn, row["id"], newb)
         glib.idle_add(self.emit, "node-changed", h)
 
   def add_node(self, contact, hash, version=None, received=False):
@@ -164,7 +164,7 @@ class DHTRoutingTable(gobject.GObject):
           glib.idle_add(self.emit, "bucket-changed",
                         row["bucket_id"])
 
-    rows = quries.get_buckets_in_server(self.conn, self.server.id_num)
+    rows = queries.get_buckets_in_server(self.conn, self.server.id_num)
     for r in rows:
       if (now - r["updated"]).seconds > IDLE_TIMEOUT:
         self._refresh_bucket(r["id"])

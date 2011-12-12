@@ -40,7 +40,7 @@ def get_non_pending_nodes_in_bucket(conn, id):
 
 def set_bucket_end(conn, id, end, time):
   conn.execute("UPDATE buckets SET end=?, updated=? WHERE id=?",
-               (end, updated, id))
+               (end, time, id))
 
 def set_node_bucket(conn, node_id, bucket_id):
   conn.execute("UPDATE nodes SET bucket_id=? WHERE id=?",
@@ -115,11 +115,11 @@ def add_peer(conn, contact, time):
                      (contact, time, time))
 
 def set_peer_updated(conn, id, time):
-  conn.execute("UPDATE peers SET updated=? WHERE id=?", (now, id))
+  conn.execute("UPDATE peers SET updated=? WHERE id=?", (time, id))
 
 def get_torrent_by_hash(conn, hash):
   return conn.select_one("SELECT * FROM torrents WHERE hash=? LIMIT 1",
-                         (torrent,))
+                         (hash,))
 
 def add_torrent(conn, hash, time, seed_bloom, peer_bloom):
   return conn.insert("INSERT INTO torrents VALUES (NULL, ?, ?, ?, ?, ?)",
@@ -128,6 +128,10 @@ def add_torrent(conn, hash, time, seed_bloom, peer_bloom):
 def set_torrent_filters(conn, id, time, seed_bloom, peer_bloom):
   conn.execute("UPDATE torrents SET updated=?,seeds=?,peers=? WHERE id=?",
                (time, seed_bloom, peer_bloom, id))
+
+def add_torrent_filters(conn, id, time, seed_bloom, peer_bloom):
+  conn.execute("""UPDATE torrents SET updated=?,seeds=seeds|?,peers=peers|?
+                   WHERE id=?""", (time, seed_bloom, peer_bloom, id))
 
 def get_peer_torrent_by_peer_and_torrent(conn, peer, torrent):
   return conn.select_one("""SELECT * FROM peer_torrents WHERE peer_id=? AND
