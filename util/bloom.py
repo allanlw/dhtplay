@@ -4,16 +4,22 @@ import math
 import sqlite3
 import operator
 
-from net.sha1hash import Hash
+from sha1hash import Hash
 
 class BloomFilter:
   """Bloom filter implemented to BEP_0033 spec."""
   K = 2
   M = 256 * 8
   def __init__(self, filter1=None, filter2=None):
-    if filter1 is None and filter2 is None:
+    """Constructs a new bloom filter.
+
+    Takes either one bloom filter, one binary string representing
+    a bloom filter, one hex string representing a bloom filter,
+    or two of any of the previous which are ORed together to
+    create a new bloom filter."""
+    if filter1 in (None,0,"0") and filter2 in (None,0,"0"):
       self.bloom = [0 for x in range(self.M/8)]
-    elif filter2 is None:
+    elif filter2 in (None,0,"0"):
       self.bloom = []
       if isinstance(filter1, BloomFilter):
         self.bloom[:] = filter1.bloom[:]

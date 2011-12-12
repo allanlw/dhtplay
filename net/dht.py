@@ -5,9 +5,9 @@ import gobject
 import glib
 from datetime import datetime
 
-from net.bencode import *
-from net.sha1hash import Hash
-from net.contactinfo import ContactInfo
+from util.bencode import *
+from util.sha1hash import Hash
+from util.contactinfo import ContactInfo
 from sql import queries
 
 MAX_BUCKET_SIZE = 8

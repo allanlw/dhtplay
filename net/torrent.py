@@ -2,7 +2,7 @@ import gobject
 import glib
 from datetime import datetime
 
-from net.bloom import BloomFilter
+from util.bloom import BloomFilter
 from sql import queries
 
 class TorrentDB(gobject.GObject):

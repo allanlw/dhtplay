@@ -8,7 +8,7 @@ else:
 import gobject
 import glib
 
-from net.contactinfo import ContactInfo
+from util.contactinfo import ContactInfo
 import version
 
 class UPNPManager(gobject.GObject):

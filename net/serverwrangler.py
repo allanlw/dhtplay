@@ -8,8 +8,8 @@ import random
 from net.server import DHTServer
 from net.torrent import TorrentDB
 from net.upnp import UPNPManager
-from net.contactinfo import ContactInfo
-from net.sha1hash import Hash
+from util.contactinfo import ContactInfo
+from util.sha1hash import Hash
 from sql.thread import SQLiteThread
 from sql.db import CREATE_DB_SCRIPT
 from sql import queries

@@ -7,10 +7,10 @@ import hashlib
 import random
 
 from net.dht import DHTRoutingTable
-from net.sha1hash import Hash
-from net.contactinfo import ContactInfo
-from net.bencode import *
-from net.bloom import BloomFilter
+from util.sha1hash import Hash
+from util.contactinfo import ContactInfo
+from util.bencode import *
+from util.bloom import BloomFilter
 import version
 
 REFRESH_CHECK = 30 # s

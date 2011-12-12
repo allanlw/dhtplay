@@ -3,6 +3,9 @@ import threading
 import Queue
 
 import net
+from util.sha1hash import Hash
+from util.bloom import BloomFilter
+from util.contactinfo import ContactInfo
 
 class SQLiteThread(threading.Thread):
   """This is a class for sharing a SQLite connection between threads by using
@@ -19,12 +22,9 @@ class SQLiteThread(threading.Thread):
     self.db = db
     self._stopped = False
   def run(self):
-    sqlite3.register_converter("contactinfo",
-                               lambda x: net.contactinfo.ContactInfo(x))
-    sqlite3.register_converter("sha1hash",
-                               lambda x: net.sha1hash.Hash(x))
-    sqlite3.register_converter("bloom",
-                               lambda x: net.bloom.BloomFilter(x))
+    sqlite3.register_converter("contactinfo", ContactInfo)
+    sqlite3.register_converter("sha1hash", Hash)
+    sqlite3.register_converter("bloom", BloomFilter)
 
     conn = sqlite3.connect(self.db,
                         detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES,

@@ -8,8 +8,8 @@ from net.serverwrangler import ServerWrangler
 from ui import dialogs
 from ui import dbview
 from ui import images
-from net.contactinfo import ContactInfo
-from net.sha1hash import Hash
+from util.contactinfo import ContactInfo
+from util.sha1hash import Hash
 from ui.statuslabel import StatusLabel
 from version import name, version
 from net import upnp

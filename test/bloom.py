@@ -1,16 +1,18 @@
 """Test for the bloom filter implementation."""
-from net.bloom import BloomFilter
-from net.contactinfo import ContactInfo
+import unittest
+
+from util.bloom import BloomFilter
+from util.contactinfo import ContactInfo
 
 class TestBloomFilter(unittest.TestCase):
   def setUp(self):
-    this.b = BloomFilter()
+    self.b = BloomFilter()
     for i in range(255+1):
-      this.b.insert_host(ContactInfo("192.0.2.{0}".format(i)))
+      self.b.insert_host(ContactInfo("192.0.2.{0}".format(i), 80))
     for i in range(0x3E7+1):
-      this.b.insert_host(ContactInfo("2001:DB8::{0:x}".format(i)))
+      self.b.insert_host(ContactInfo("2001:DB8::{0:x}".format(i), 80))
   def test_hex(self):
-    self.assertEqual(this.b.get_hex().lower(),(
+    self.assertEqual(self.b.get_hex().lower(),(
         "F6C3F5EAA07FFD91BDE89F777F26FB2BFF37BDB8FB2BBAA2FD3DDDE7BACFFF75" +
         "EE7CCBAEFE5EEDB1FBFAFF67F6ABFF5E43DDBCA3FD9B9FFDF4FFD3E9DFF12D1B" +
         "DF59DB53DBE9FA5B7FF3B8FDFCDE1AFB8BEDD7BE2F3EE71EBBBFE93BCDEEFE14" +
@@ -22,4 +24,4 @@ class TestBloomFilter(unittest.TestCase):
         ).lower())
 
 if __name__ == "__main__":
-  print TestBloomFilter.main()
+  print unittest.main()
