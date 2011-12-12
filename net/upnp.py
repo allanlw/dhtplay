@@ -9,7 +9,7 @@ import gobject
 import glib
 
 from util.contactinfo import ContactInfo
-import version
+from util import version
 
 class UPNPManager(gobject.GObject):
   __gsignals__ = {

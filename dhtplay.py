@@ -4,7 +4,7 @@
 import gtk
 
 from ui.interface import Interface
-import defaults
+from util import defaults
 
 settings = "settings.cfg"
 

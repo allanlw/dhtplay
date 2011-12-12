@@ -11,7 +11,7 @@ from util.sha1hash import Hash
 from util.contactinfo import ContactInfo
 from util.bencode import *
 from util.bloom import BloomFilter
-import version
+from util import version
 
 REFRESH_CHECK = 30 # s
 NUM_SECRETS = 20 # s

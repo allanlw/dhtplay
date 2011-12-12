@@ -11,7 +11,7 @@ from ui import images
 from util.contactinfo import ContactInfo
 from util.sha1hash import Hash
 from ui.statuslabel import StatusLabel
-from version import name, version
+from util.version import name, version
 from net import upnp
 
 class Interface(gtk.Window):
