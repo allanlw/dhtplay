@@ -4,6 +4,15 @@ DHTPlay
 DHTPlay is an application for walking/exploring the Bittorrent DHT. 
 Simply clone and run ./dhtplay to try it out.
 
+Running
+-------
+To run DHTPlay, you will need the python gtk2 (pygtk) 
+library and the python gupnp idg library. In debian/ubuntu, these are 
+available as python-gtk2 and python-igd, respectively.
+
+Current DHTPlay only allows running from the same pwd as the main python 
+script. cd into the dhtplay directory and run ./dhtplay.py.
+
 Notes on design
 ---------------
   As of the time of writing this, DHTPlay uses three threads of control at any
@@ -34,9 +43,13 @@ Documents that this program aims to impliment:
   - "Minor Extensions to the Bitorrent DHT": http://www.pps.jussieu.fr/~jch/software/bittorrent/bep-dht-minor-extensions.html
   - The undocumented 'v' version extension that uTorrent and rTorrent impliment in addition to other clients. Note: there is a bit about the version key here - http://www.rasterbar.com/products/libtorrent/dht_extensions.html
 
+Contact
+-------
+For bug reports, patches, questions, etc. feel free to send me an email 
+at allan@allanwirth.com.
+
 Copyright notes
 --------------
-
 The file util/bencode.py is not under the same license as the other 
 files. It was previously released in 2011 as FreeBencode and is licensed 
 under the MIT/Expat license.
