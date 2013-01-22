@@ -67,7 +67,7 @@ class SQLiteThread(threading.Thread):
         else:
           cursor.execute(stmt[1])
       except (sqlite3.OperationalError, sqlite3.ProgrammingError,
-              ValueError, sqlite3.InterfaceError) as e:
+              ValueError, sqlite3.InterfaceError, sqlite3.IntegrityError) as e:
         raise ValueError("Invalid SQL Statement - {0} ({1})".format(stmt, e))
       if stmt[0] >= 0:
         self.results.put((stmt[0], cursor.fetchall(), cursor.lastrowid))

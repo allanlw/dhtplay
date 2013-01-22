@@ -199,7 +199,7 @@ class BucketView(DBView):
       self._data.set(iter, 3, self._data.get_value(iter, 3)+amt)
 
 class NodeView(DBView):
-  schema = (int, str, int, str, str, float, bool, str, int)
+  schema = (int, str, int, str, str, float, bool, str, int, int)
   cols = (
     ("Bucket", 0, 0),
     ("Pending", 6, 6),
@@ -207,7 +207,8 @@ class NodeView(DBView):
     ("Port", 2, 2),
     ("Hash", 3, 3, True),
     ("Version", 7, 7),
-    ("Received", 8, 8),
+    ("Sent", 8, 8),
+    ("Received", 9, 9),
     ("Last Good", 4, 5),
   )
   def __init__(self, bucketview, routingtable=None):
@@ -234,7 +235,7 @@ class NodeView(DBView):
                        row["hash"].get_hex(),
                        row["updated"].ctime(),
                        time.mktime(row["updated"].timetuple()),
-                       row["pending"], version,
+                       row["pending"], version, row["sent"],
                        row["received"]))
     if not row["pending"]:
       self.bucketview._mod_bucket_row(row["bucket_id"], +1)
@@ -252,7 +253,7 @@ class NodeView(DBView):
                      4, row["updated"].ctime(),
                      5, time.mktime(row["updated"].timetuple()),
                      6, row["pending"], 7, version,
-                     8, row["received"])
+                     8, row["sent"], 9, row["received"])
       if not row["pending"]:
         self.bucketview._mod_bucket_row(row["bucket_id"], +1)
   def _remove_node_row(self, hash):

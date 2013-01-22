@@ -30,12 +30,12 @@ def create_bucket(conn, start, end, time, server_id):
                      (start, end, time, time, server_id))
 
 def create_node(conn, hash, contact, bucket, good, pending, version, received,
-                time):
+                sent, time):
   return conn.insert("""INSERT INTO nodes(id, hash, contact, bucket_id, good,
-                        pending, version, received, created, updated) VALUES
-                        (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        pending, version, received, created, updated, sent)
+                        VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                       (hash, contact, bucket, good, pending, version,
-                       received, time, time))
+                       received, time, time, sent))
 
 def set_bucket_updated(conn, id, time):
   conn.execute("UPDATE buckets SET updated=? WHERE id=?",
@@ -77,6 +77,9 @@ def get_node_by_contact(conn, server_id, contact):
 def set_node_updated(conn, id, time, version, received):
   conn.execute("""UPDATE nodes SET updated=?, version=?, received=received+?
                   WHERE id=?""", (time, version, received, id))
+
+def add_node_sent(conn, id):
+  conn.execute("UPDATE nodes SET sent=sent+1 WHERE id=?", (id,))
 
 def get_bucket_for_hash(conn, server_id, hash):
   return conn.select_one("""SELECT * FROM buckets WHERE start<=? AND end>? AND

@@ -59,7 +59,7 @@ class DHTRoutingTable(gobject.GObject):
                 version=None, received=False):
     received = int(received)
     queries.create_node(self.conn, hash, contact, bucket, good, pending,
-                        version, received, time)
+                        version, received, 0, time)
     glib.idle_add(self.emit, "node-added", hash)
     if not pending:
       queries.set_bucket_updated(self.conn, bucket, time)
@@ -99,6 +99,12 @@ class DHTRoutingTable(gobject.GObject):
       if h.get_int() >= bmid:
         queries.set_node_bucket(self.conn, row["id"], newb)
         glib.idle_add(self.emit, "node-changed", h)
+
+  def add_node_sent(self, contact):
+    n = queries.get_node_by_contact(self.conn, self.server.id_num, contact)
+    if n is not None:
+      queries.add_node_sent(self.conn, n["id"])
+      glib.idle_add(self.emit, "node-changed", n["hash"])
 
   def add_node(self, contact, hash, version=None, received=False):
     if version is not None:

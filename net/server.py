@@ -133,6 +133,7 @@ class DHTRequestHandler(SocketServer.DatagramRequestHandler):
     if self.server.callbacks.has_key(message["t"]):
       while self.server.callbacks[message["t"]]:
         self.server.callbacks[message["t"]].pop()(message)
+      del self.server.callbacks[message["t"]]
 
 class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
   incoming = gobject.property(type=bool, default=False)
@@ -185,6 +186,7 @@ class DHTServer(SocketServer.ThreadingUDPServer, gobject.GObject):
   def send_msg(self, to, msg):
     self._log("Sending message to "+str(to) +" - "+str(msg))
     enc_msg = bencode(msg)
+    self.routingtable.add_node_sent(ContactInfo(*to))
     try:
       self.socket.sendto(enc_msg, to)
     except socket.error as (errno, strerror):

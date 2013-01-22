@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS nodes (
   pending BOOLEAN NOT NULL,
   version BLOB NULL,
   received INTEGER NOT NULL,
+  sent INTEGER NOT NULL,
   created timestamp NOT NULL,
   updated timestamp NOT NULL,
 
