@@ -1,4 +1,11 @@
-Notes on design:
+DHTPlay
+=======
+
+DHTPlay is an application for walking/exploring the Bittorrent DHT. 
+Simply clone and run ./dhtplay to try it out.
+
+Notes on design
+---------------
   As of the time of writing this, DHTPlay uses three threads of control at any
 given time. The first is the main thread of control that is started by the
 python interpreter which enters a gtk main loop after doing a bit of
@@ -27,7 +34,16 @@ Documents that this program aims to impliment:
   "Minor Extensions to the Bitorrent DHT": http://www.pps.jussieu.fr/~jch/software/bittorrent/bep-dht-minor-extensions.html
   The undocumented 'v' version extension that uTorrent and rTorrent impliment in addition to other clients. Note: there is a bit about the version key here - http://www.rasterbar.com/products/libtorrent/dht_extensions.html
 
-Copyright notes:
-  Magnet Icon:
-    source: http://commons.wikimedia.org/wiki/File:Magnet-icon.gif
-    license: No Rights Reserved
+Copyright notes
+--------------
+
+The file util/bencode.py is not under the same license as the other 
+files. It was previously released in 2011 as FreeBencode and is licensed 
+under the MIT/Expat license.
+
+The Magnet Icon is sourced from 
+http://commons.wikimedia.org/wiki/File:Magnet-icon.gif. It is listed as 
+No Rights Reserved.
+
+All other files are licensed under the GPLv3+. See COPYING for license 
+details.
