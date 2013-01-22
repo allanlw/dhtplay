@@ -91,7 +91,7 @@ class TorrentDB(gobject.GObject):
                                seed, now)
       signal = "peer-torrent-added"
     else:
-      queries.set_peer_torrent_updated(conn, peer_torrent_row["id"], now)
+      queries.set_peer_torrent_updated(self.conn, peer_torrent_row["id"], now)
       signal = "peer-torrent-updated"
 
     peer_torrent_row = queries.get_peer_torrent_by_peer_and_torrent(self.conn,
@@ -128,7 +128,7 @@ class TorrentDB(gobject.GObject):
     if seed:
       queries.add_torrent_filters(row["id"], now, filter, 0)
     else:
-      queries.add_torrent_filters(row["id"], now, 0, fileter)
+      queries.add_torrent_filters(row["id"], now, 0, filter)
 
     glib.idle_add(self.emit, "torrent-changed", hash)
   def get_magnet(self, hash):
