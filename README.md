@@ -23,16 +23,16 @@ GUI thread needs to communicate with the server thread a special udp message
 is sent to the server.
 
 To recap - Threads:
-  1 Main Thread (GTK/GDK ui thread (can be locked using gtk.gdk.lock))
-  1 Server Wrangler thread (polls file descriptors to check for packets)
-  1 SQLite Thread (holds sqlite cursor and connection, has query functions)
-  x DHT Server threads (one for each server)
+  - 1 Main Thread (GTK/GDK ui thread (can be locked using gtk.gdk.lock))
+  - 1 Server Wrangler thread (polls file descriptors to check for packets)
+  - 1 SQLite Thread (holds sqlite cursor and connection, has query functions)
+  - x DHT Server threads (one for each server)
 
 Documents that this program aims to impliment:
-  BEP_0005 (DHT Protocol): http://www.bittorrent.org/beps/bep_0005.html
-  BEP_0033 (DHT Scrapes): http://www.bittorrent.org/beps/bep_0033.html
-  "Minor Extensions to the Bitorrent DHT": http://www.pps.jussieu.fr/~jch/software/bittorrent/bep-dht-minor-extensions.html
-  The undocumented 'v' version extension that uTorrent and rTorrent impliment in addition to other clients. Note: there is a bit about the version key here - http://www.rasterbar.com/products/libtorrent/dht_extensions.html
+  - BEP_0005 (DHT Protocol): http://www.bittorrent.org/beps/bep_0005.html
+  - BEP_0033 (DHT Scrapes): http://www.bittorrent.org/beps/bep_0033.html
+  - "Minor Extensions to the Bitorrent DHT": http://www.pps.jussieu.fr/~jch/software/bittorrent/bep-dht-minor-extensions.html
+  - The undocumented 'v' version extension that uTorrent and rTorrent impliment in addition to other clients. Note: there is a bit about the version key here - http://www.rasterbar.com/products/libtorrent/dht_extensions.html
 
 Copyright notes
 --------------
