@@ -50,9 +50,13 @@ class ServerWrangler(gobject.GObject):
     self.pending = Queue.Queue()
     self.thread = None
 
-    self.upnp = UPNPManager()
-    self.upnp.connect("port-added", self._port_added)
-    self.upnp.connect("add-port-error", self._add_port_error)
+    try:
+      self.upnp = UPNPManager()
+    except NotImplementedError:
+      self.upnp = None
+    else:
+      self.upnp.connect("port-added", self._port_added)
+      self.upnp.connect("add-port-error", self._add_port_error)
 
     self.conn = SQLiteThread(self.config.get("torrent", "db"))
     self.conn.start()
@@ -66,6 +70,8 @@ class ServerWrangler(gobject.GObject):
                       server["upnp"], False)
   def add_server(self, hash, bind, host, upnp, insert=True):
     if upnp:
+      if self.upnp is None:
+        raise NotImplementedError("No upnp")
       if insert:
         queries.add_server(self.conn, hash, bind, None, True)
       self.upnp.add_udp_port(bind)
@@ -135,5 +141,6 @@ class ServerWrangler(gobject.GObject):
         pass
     for server in self.servers:
       server.shutdown()
-    self.upnp.shutdown()
+    if self.upnp is not None:
+      self.upnp.shutdown()
     self.conn.close()

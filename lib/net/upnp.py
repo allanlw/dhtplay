@@ -38,6 +38,9 @@ class UPNPManager(gobject.GObject):
   lease_description = "UPNP port forwarded by "+version.full
   lease_duration = 5*60 # Five minute lease time - tread lightly
   def __init__(self):
+    if not HAVE_UPNP:
+      raise NotImplementedError("No upnp support")
+
     gobject.GObject.__init__(self)
     self.igd = igd.Simple()
     self.igd.connect("mapped-external-port", self._do_mapped_external_port)
