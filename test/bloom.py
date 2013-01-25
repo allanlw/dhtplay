@@ -18,8 +18,8 @@
 """Test for the bloom filter implementation."""
 import unittest
 
-from util.bloom import BloomFilter
-from util.contactinfo import ContactInfo
+from lib.util.bloom import BloomFilter
+from lib.util.contactinfo import ContactInfo
 
 class TestBloomFilter(unittest.TestCase):
   def setUp(self):

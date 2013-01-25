@@ -19,8 +19,8 @@ import gobject
 import glib
 from datetime import datetime
 
-from util.bloom import BloomFilter
-from sql import queries
+from ..util.bloom import BloomFilter
+from ..sql import queries
 
 class TorrentDB(gobject.GObject):
   __gsignals__ = {
@@ -126,9 +126,9 @@ class TorrentDB(gobject.GObject):
       return
 
     if seed:
-      queries.add_torrent_filters(row["id"], now, filter, 0)
+      queries.add_torrent_filters(self.conn, row["id"], now, filter, 0)
     else:
-      queries.add_torrent_filters(row["id"], now, 0, filter)
+      queries.add_torrent_filters(self.conn, row["id"], now, 0, filter)
 
     glib.idle_add(self.emit, "torrent-changed", hash)
   def get_magnet(self, hash):

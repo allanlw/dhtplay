@@ -25,8 +25,8 @@ else:
 import gobject
 import glib
 
-from util.contactinfo import ContactInfo
-from util import version
+from ..util.contactinfo import ContactInfo
+from ..util import version
 
 class UPNPManager(gobject.GObject):
   __gsignals__ = {

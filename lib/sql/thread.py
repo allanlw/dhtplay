@@ -19,10 +19,9 @@ import sqlite3
 import threading
 import Queue
 
-import net
-from util.sha1hash import Hash
-from util.bloom import BloomFilter
-from util.contactinfo import ContactInfo
+from ..util.sha1hash import Hash
+from ..util.bloom import BloomFilter
+from ..util.contactinfo import ContactInfo
 
 class SQLiteThread(threading.Thread):
   """This is a class for sharing a SQLite connection between threads by using

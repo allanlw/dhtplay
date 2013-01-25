@@ -22,10 +22,10 @@ import gobject
 import glib
 from datetime import datetime
 
-from util.bencode import *
-from util.sha1hash import Hash
-from util.contactinfo import ContactInfo
-from sql import queries
+from ..util.bencode import *
+from ..util.sha1hash import Hash
+from ..util.contactinfo import ContactInfo
+from ..sql import queries
 
 MAX_BUCKET_SIZE = 8
 MAX_PENDING_PINGS = 2

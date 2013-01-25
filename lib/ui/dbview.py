@@ -20,7 +20,7 @@ import gobject
 import time
 import urllib
 
-from util.sha1hash import Hash
+from ..util.sha1hash import Hash
 
 class BaseDBView(gtk.ScrolledWindow):
   """Base class for convenient database views."""

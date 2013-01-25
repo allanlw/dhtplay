@@ -21,15 +21,15 @@ import gtk
 import glib
 import webbrowser
 
-from net.serverwrangler import ServerWrangler
-from ui import dialogs
-from ui import dbview
-from ui import images
-from util.contactinfo import ContactInfo
-from util.sha1hash import Hash
-from ui.statuslabel import StatusLabel
-from util.version import name, version
-from net import upnp
+from ..net.serverwrangler import ServerWrangler
+from . import dialogs
+from . import dbview
+from .. import images
+from ..util.contactinfo import ContactInfo
+from ..util.sha1hash import Hash
+from .statuslabel import StatusLabel
+from ..util.version import name, version
+from ..net import upnp
 
 class Interface(gtk.Window):
   def __init__(self, opts):

@@ -1,1 +1,3 @@
 *.pyc
+torrents.db*
+settings.cfg

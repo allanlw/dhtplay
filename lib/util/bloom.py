@@ -21,7 +21,7 @@ import math
 import sqlite3
 import operator
 
-from sha1hash import Hash
+from .sha1hash import Hash
 
 class BloomFilter:
   """Bloom filter implemented to BEP_0033 spec."""

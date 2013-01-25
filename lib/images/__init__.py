@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright (c) 2011-2013 Allan Wirth <allan@allanwirth.com>
 #
 # This file is part of DHTPlay.
@@ -16,31 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Contains a function start() that starts DHTPlay."""
-
 import gtk
+import os
 
-from lib.ui.interface import Interface
-from lib.util import defaults
+_BASE = os.path.dirname(os.path.realpath(__file__))
 
-settings = "settings.cfg"
-
-def start():
-  """Start DHTPlay."""
-  config = defaults.DEFAULT_CONFIG
-  config.read(settings)
-
-  gtk.gdk.threads_init()
-  app = Interface(config)
-  app.show()
-  gtk.main()
-
-  try:
-    app.destroy()
-  except:
-    pass
-
-  config.write(open(settings, 'w'))
-
-if __name__ == "__main__":
-  start()
+magnet = gtk.gdk.pixbuf_new_from_file(os.path.join(_BASE, "magnet.gif"))

@@ -22,14 +22,14 @@ import Queue
 import threading
 import random
 
-from net.server import DHTServer
-from net.torrent import TorrentDB
-from net.upnp import UPNPManager
-from util.contactinfo import ContactInfo
-from util.sha1hash import Hash
-from sql.thread import SQLiteThread
-from sql.db import CREATE_DB_SCRIPT
-from sql import queries
+from ..net.server import DHTServer
+from ..net.torrent import TorrentDB
+from ..net.upnp import UPNPManager
+from ..util.contactinfo import ContactInfo
+from ..util.sha1hash import Hash
+from ..sql.thread import SQLiteThread
+from ..sql.db import CREATE_DB_SCRIPT
+from ..sql import queries
 
 class ServerWrangler(gobject.GObject):
   incoming = gobject.property(type=bool, default=False)

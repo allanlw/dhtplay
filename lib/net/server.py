@@ -23,12 +23,12 @@ import traceback
 import hashlib
 import random
 
-from net.dht import DHTRoutingTable
-from util.sha1hash import Hash
-from util.contactinfo import ContactInfo
-from util.bencode import *
-from util.bloom import BloomFilter
-from util import version
+from ..net.dht import DHTRoutingTable
+from ..util.sha1hash import Hash
+from ..util.contactinfo import ContactInfo
+from ..util.bencode import *
+from ..util.bloom import BloomFilter
+from ..util import version
 
 REFRESH_CHECK = 30 # s
 NUM_SECRETS = 20 # s
