@@ -10,9 +10,6 @@ To run DHTPlay, you will need the python gtk2 (pygtk)
 library and the python gupnp idg library. In debian/ubuntu, these are 
 available as python-gtk2 and python-igd, respectively.
 
-Current DHTPlay only allows running from the same pwd as the main python 
-script. cd into the dhtplay directory and run ./dhtplay.py.
-
 Notes on design
 ---------------
   As of the time of writing this, DHTPlay uses three threads of control at any
