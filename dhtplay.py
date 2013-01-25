@@ -19,16 +19,23 @@
 """Contains a function start() that starts DHTPlay."""
 
 import gtk
+import xdg.BaseDirectory
+import os
 
 from lib.ui.interface import Interface
 from lib.util import defaults
 
-settings = "settings.cfg"
-
 def start():
   """Start DHTPlay."""
+  settings_dir = os.path.join(xdg.BaseDirectory.xdg_config_home, "dhtplay")
+
+  if not os.path.isdir(settings_dir):
+    os.mkdir(settings_dir)
+
+  settings_file = os.path.join(settings_dir, "dhtplay.conf")
+
   config = defaults.DEFAULT_CONFIG
-  config.read(settings)
+  config.read(settings_file)
 
   gtk.gdk.threads_init()
   app = Interface(config)
@@ -40,7 +47,7 @@ def start():
   except:
     pass
 
-  config.write(open(settings, 'w'))
+  config.write(open(settings_file, "w"))
 
 if __name__ == "__main__":
   start()
