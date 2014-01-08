@@ -4,11 +4,28 @@ DHTPlay
 DHTPlay is an application for walking/exploring the Bittorrent DHT. 
 Simply clone and run ./dhtplay to try it out.
 
+Note this program only lets you browse the bittorrent DHT, which only contains *info hashes* of torrents. There is no way to browse the bittorrent DHT in such a way that you can actually retrieve the information about the torrents, unless you also implement the actual bittorrent protocol including the extension for transmitting torrents in-band. Right now you can get a magnet link only.
+
 Running
 -------
 To run DHTPlay, you will need the python gtk2 (pygtk) 
 library and the python gupnp idg library. In debian/ubuntu, these are 
 available as python-gtk2 and python-gupnp-igd, respectively.
+
+The "new server" button creates a new DHT Server. If you install python-gupnp-igd (this is the name of the package in debian/ubuntu at least) the UPnP check box will be available and this will be a lot easier for you.
+
+Alternatively, if you want to forward the port manually, I believe the correct settings are:
+
+    Bind Address: 0.0.0.0
+    Bind Port: 12345
+    Hash: <whatever>
+    External Addr: <your external IP>
+    External Port: 12345
+
+Essentially, the external address+port are used to tell other DHT nodes what your address is. The bind address+bind port are used locally to create the listening port on your own computer. When you're behind a NAT (like you are) the external address and the bind address have to be different. "0.0.0.0" essentially says - listen on all interfaces.
+
+After you make a server, you need to connect to the dht network by adding peers. From there, you can look around.
+
 
 Notes on design
 ---------------
