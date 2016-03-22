@@ -19,7 +19,7 @@
 import socket
 import sqlite3
 
-class ContactInfo:
+class ContactInfo(object):
   """Represents an internet address + port combination."""
   def __init__(self, addr, port=None):
     if isinstance(addr, ContactInfo):

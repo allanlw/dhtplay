@@ -19,7 +19,7 @@
 import math
 import sqlite3
 
-class Hash:
+class Hash(object):
   """Represents a 160 byte (SHA1) hash."""
   def __init__(self, raw_hash):
     self.id = raw_hash

@@ -23,7 +23,7 @@ import operator
 
 from .sha1hash import Hash
 
-class BloomFilter:
+class BloomFilter(object):
   """Bloom filter implemented to BEP_0033 spec."""
   K = 2
   M = 256 * 8
