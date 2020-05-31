@@ -1,6 +1,8 @@
 DHTPlay
 =======
 
+**NOTE: This python code is from ~2011 and is not maintained. It might be of interest to some, but use at your own risk.**
+
 DHTPlay is an application for walking/exploring the Bittorrent DHT. 
 Simply clone and run ./dhtplay to try it out.
 
